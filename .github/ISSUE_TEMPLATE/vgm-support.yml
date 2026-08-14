@@ -1,0 +1,102 @@
+name: VGM support / compatibility report
+description: Submit a sanitized Ryzen AI Max VGM discovery or post-change result.
+title: "[Compatibility]: "
+labels: ["compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping build the compatibility matrix. **Do not post passwords, SSH private keys, access tokens, private infrastructure details, or personal identifiers.**
+
+  - type: input
+    id: system
+    attributes:
+      label: System / OEM model
+      placeholder: Example: vendor and exact model
+    validations:
+      required: true
+
+  - type: input
+    id: cpu
+    attributes:
+      label: CPU / APU
+      placeholder: Example: AMD Ryzen AI Max+ 395
+    validations:
+      required: true
+
+  - type: input
+    id: memory
+    attributes:
+      label: Physical memory
+      placeholder: Example: 128 GB
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows build
+    validations:
+      required: true
+
+  - type: input
+    id: driver
+    attributes:
+      label: AMD driver version
+    validations:
+      required: true
+
+  - type: input
+    id: adlx
+    attributes:
+      label: AMD ADLX version
+    validations:
+      required: true
+
+  - type: dropdown
+    id: support
+    attributes:
+      label: Did ADLX report Variable Graphics Memory support?
+      options:
+        - "Yes"
+        - "No"
+        - "Unknown"
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: Sanitized VGM option enumeration
+      description: Paste the read-only name/mode/carved/remaining values. Remove secrets and identifiers first.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mutation
+    attributes:
+      label: Was a VGM mutation attempted?
+      options:
+        - "No — discovery only"
+        - "Yes — completed and post-reboot attested"
+        - "Yes — result uncertain"
+    validations:
+      required: true
+
+  - type: textarea
+    id: post
+    attributes:
+      label: Post-change evidence, if applicable
+      description: Include ADLX current state, Windows-visible memory, driver GPU memory, and SetOption return/call-count evidence when available.
+      render: text
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed credentials, tokens, keys, and private identifiers from the submitted output.
+          required: true
+        - label: I understand that an option number on one system must not be assumed to represent the same VGM target on another system.
+          required: true
