@@ -1,0 +1,30 @@
+# Local evidence and machine-specific artifacts
+*.log
+*.tmp
+*.marker
+evidence/
+private-evidence/
+
+# Credentials / secrets
+*.pem
+*.key
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Build products
+build/
+out/
+*.exe
+*.dll
+*.pdb
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
