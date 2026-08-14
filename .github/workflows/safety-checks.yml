@@ -1,0 +1,67 @@
+name: Safety checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile Python sources
+        run: python -m compileall -q scripts
+
+      - name: Enforce read-only probe contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='scripts/vgm_readonly_probe.py'
+          test -f "$file"
+          grep -q 'SETOPTION_BOUND=FALSE' "$file"
+          grep -q 'SETOPTION_CALLED=FALSE' "$file"
+          grep -q 'VGM_CHANGED=FALSE' "$file"
+
+          # Block obvious code forms that would bind/call the mutating API in
+          # the file explicitly presented to users as read-only. Documentation
+          # strings may mention SetOption, so this is intentionally narrow.
+          if grep -En 'dll\.SetOption|\.SetOption\(|getattr\([^)]*["'"']SetOption|bind\([^\n]*,[[:space:]]*7[[:space:]]*,' "$file"; then
+            echo 'Read-only safety contract violated.' >&2
+            exit 1
+          fi
+
+      - name: Verify required safety documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in \
+            START-HERE.md \
+            docs/BEGINNER-GUIDE.md \
+            docs/ARCHITECTURE.md \
+            docs/RECOVERY.md \
+            docs/TROUBLESHOOTING.md \
+            docs/COMMUNITY-SAFETY.md \
+            docs/COMPATIBILITY.md \
+            SECURITY.md \
+            CONTRIBUTING.md; do
+              test -s "$f" || { echo "Missing required file: $f" >&2; exit 1; }
+          done
+
+      - name: Guard terminology
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIn --exclude-dir=.git -E 'upgrade (from )?64 ?GB RAM to 96 ?GB RAM' .; then
+            echo 'Misleading physical-RAM terminology detected.' >&2
+            exit 1
+          fi
