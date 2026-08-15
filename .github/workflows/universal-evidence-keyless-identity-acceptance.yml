@@ -59,6 +59,49 @@ jobs:
           touch keyless-acceptance/verify-exact.ok
           echo 'KEYLESS_EXACT_IDENTITY_VERIFICATION=PASS'
 
+      - name: Require explicit transparency and RFC3161 material in canonical bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          out = Path('keyless-acceptance')
+          bundle_path = out / 'evidence.sigstore.json'
+          bundle = json.loads(bundle_path.read_text(encoding='utf-8'))
+
+          media_type = bundle.get('mediaType')
+          material = bundle.get('verificationMaterial') or {}
+          tlog_entries = material.get('tlogEntries') or []
+          timestamp_data = material.get('timestampVerificationData') or {}
+          rfc3161 = timestamp_data.get('rfc3161Timestamps') or []
+
+          inspection = {
+              'bundle_media_type': media_type,
+              'tlog_entry_count': len(tlog_entries),
+              'rfc3161_timestamp_count': len(rfc3161),
+              'tlog_material_present': bool(tlog_entries),
+              'rfc3161_timestamp_material_present': bool(rfc3161),
+          }
+          (out / 'bundle-material-inspection.json').write_text(
+              json.dumps(inspection, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+
+          if media_type != 'application/vnd.dev.sigstore.bundle.v0.3+json':
+              raise SystemExit(f'Unexpected Sigstore bundle mediaType: {media_type!r}')
+          if not tlog_entries:
+              raise SystemExit('Sigstore bundle contains no transparency-log entries')
+          if not rfc3161:
+              raise SystemExit('Sigstore bundle contains no RFC3161 signed timestamp material')
+
+          (out / 'tlog-material-present.ok').touch()
+          (out / 'timestamp-material-present.ok').touch()
+          print('BUNDLE_TLOG_MATERIAL=PASS')
+          print('BUNDLE_RFC3161_TIMESTAMP_MATERIAL=PASS')
+          PY
+
       - name: Prove wrong identity and tampered bytes fail closed
         shell: bash
         run: |
@@ -105,10 +148,13 @@ jobs:
           digest = hashlib.sha256(evidence.read_bytes()).hexdigest()
           identity = (out / 'expected-identity.txt').read_text(encoding='utf-8').strip()
           issuer = (out / 'expected-issuer.txt').read_text(encoding='utf-8').strip()
+          exact = (out / 'verify-exact.ok').exists()
+          tlog_material = (out / 'tlog-material-present.ok').exists()
+          timestamp_material = (out / 'timestamp-material-present.ok').exists()
 
           profile = {
               'schema_version': '0.1',
-              'profile_id': 'github-actions-keyless-exact-v0.1',
+              'profile_id': 'github-actions-keyless-exact-v0.2',
               'artifact': {'sha256': digest},
               'signer': {
                   'mode': 'SIGSTORE_KEYLESS',
@@ -131,15 +177,15 @@ jobs:
           }
           observation = {
               'artifact_sha256': digest,
-              'cryptographic_signature_verified': (out / 'verify-exact.ok').exists(),
+              'cryptographic_signature_verified': exact,
               'certificate_identity': identity,
               'certificate_oidc_issuer': issuer,
-              'transparency_verified': (out / 'verify-exact.ok').exists(),
-              'timestamp_verified': (out / 'verify-exact.ok').exists(),
-              'timestamp_source': 'SIGSTORE_TSA',
+              'transparency_verified': exact and tlog_material,
+              'timestamp_verified': exact and timestamp_material,
+              'timestamp_source': 'SIGSTORE_TSA' if timestamp_material else None,
               'provenance_verified': False,
               'builder_id': None,
-              'verifier': 'cosign-v3.0.6-keyless-bundle',
+              'verifier': 'cosign-v3.0.6-keyless-bundle+material-inspection',
           }
           (out / 'trust-profile.json').write_text(json.dumps(profile, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           (out / 'verifier-observation.json').write_text(json.dumps(observation, indent=2, sort_keys=True) + '\n', encoding='utf-8')
@@ -166,21 +212,25 @@ jobs:
 
           out = Path('keyless-acceptance')
           exact = (out / 'verify-exact.ok').exists()
+          tlog_material = (out / 'tlog-material-present.ok').exists()
+          timestamp_material = (out / 'timestamp-material-present.ok').exists()
           wrong_identity = (out / 'wrong-identity-rejected.ok').exists()
           tamper = (out / 'tamper-rejected.ok').exists()
           policy = (out / 'trust-policy.ok').exists()
           record = {
-              'schema_version': '0.1',
+              'schema_version': '0.2',
               'evidence_type': 'universal-evidence-keyless-identity-supporting-acceptance',
               'tool': {'name': 'cosign', 'version_pin': 'v3.0.6'},
               'fixture': 'examples/universal-evidence-readonly-example.json',
-              'status': 'PASS' if all((exact, wrong_identity, tamper, policy)) else 'INCOMPLETE_OR_FAILED',
+              'status': 'PASS' if all((exact, tlog_material, timestamp_material, wrong_identity, tamper, policy)) else 'INCOMPLETE_OR_FAILED',
               'claims': {
                   'cryptographic_signature_verified': exact,
                   'signer_identity_verified': exact,
                   'oidc_issuer_verified': exact,
-                  'transparency_log_inclusion_verified': exact,
-                  'trusted_timestamp_verified': exact,
+                  'transparency_log_inclusion_verified': exact and tlog_material,
+                  'transparency_log_material_present': tlog_material,
+                  'trusted_timestamp_verified': exact and timestamp_material,
+                  'rfc3161_timestamp_material_present': timestamp_material,
                   'wrong_identity_rejected': wrong_identity,
                   'tampered_payload_rejected': tamper,
                   'exact_trust_policy_satisfied': policy,
@@ -208,7 +258,9 @@ jobs:
           grep -q '"status": "PASS"' keyless-acceptance/claim-boundary.json
           grep -q '"signer_identity_verified": true' keyless-acceptance/claim-boundary.json
           grep -q '"transparency_log_inclusion_verified": true' keyless-acceptance/claim-boundary.json
+          grep -q '"transparency_log_material_present": true' keyless-acceptance/claim-boundary.json
           grep -q '"trusted_timestamp_verified": true' keyless-acceptance/claim-boundary.json
+          grep -q '"rfc3161_timestamp_material_present": true' keyless-acceptance/claim-boundary.json
           grep -q '"slsa_conformance_verified": false' keyless-acceptance/claim-boundary.json
           grep -q '"artifact_goodness_proven": false' keyless-acceptance/claim-boundary.json
 
@@ -221,6 +273,7 @@ jobs:
             keyless-acceptance/evidence.json
             keyless-acceptance/evidence.sha256
             keyless-acceptance/evidence.sigstore.json
+            keyless-acceptance/bundle-material-inspection.json
             keyless-acceptance/expected-identity.txt
             keyless-acceptance/expected-issuer.txt
             keyless-acceptance/sign.txt
