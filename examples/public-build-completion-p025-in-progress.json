@@ -1,0 +1,142 @@
+{
+  "schema_version": "0.1",
+  "subject_id": "P-025",
+  "status": "IN_PROGRESS",
+  "gates": {
+    "problem_and_intended_users_defined": {
+      "state": "PASS",
+      "evidence": ["README.md"],
+      "rationale": "The public README defines the AMD Ryzen AI Max VGM problem and intended operator audience.",
+      "applicability_reviewed": true
+    },
+    "public_repository_or_distribution_surface_exists": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb"],
+      "rationale": "Public GitHub repository exists.",
+      "applicability_reviewed": true
+    },
+    "explicit_open_source_license": {
+      "state": "PASS",
+      "evidence": ["LICENSE"],
+      "rationale": "Repository contains an explicit license file.",
+      "applicability_reviewed": true
+    },
+    "complete_readme": {
+      "state": "PASS",
+      "evidence": ["README.md"],
+      "rationale": "Repository README is present and substantive.",
+      "applicability_reviewed": true
+    },
+    "beginner_start_here_path": {
+      "state": "PASS",
+      "evidence": ["START-HERE.md", "docs/BEGINNER-GUIDE.md"],
+      "rationale": "Beginner entry points are public.",
+      "applicability_reviewed": true
+    },
+    "engineering_or_architecture_documentation": {
+      "state": "PASS",
+      "evidence": ["docs/ARCHITECTURE.md", "docs/TECHNICAL_NOTES.md"],
+      "rationale": "Engineering and architecture documentation exists.",
+      "applicability_reviewed": true
+    },
+    "reproducible_installation_or_use_instructions": {
+      "state": "PASS",
+      "evidence": ["docs/VERIFIED_SEQUENCE.md"],
+      "rationale": "A reproducible operator sequence is documented.",
+      "applicability_reviewed": true
+    },
+    "safety_scope_and_limitations": {
+      "state": "PASS",
+      "evidence": ["docs/COMMUNITY-SAFETY.md", "docs/TECHNICAL_NOTES.md"],
+      "rationale": "Safety boundaries and limitations are documented.",
+      "applicability_reviewed": true
+    },
+    "recovery_or_rollback_guidance_for_mutating_tools": {
+      "state": "PASS",
+      "evidence": ["docs/RECOVERY.md"],
+      "rationale": "Recovery guidance exists for the mutating VGM workflow.",
+      "applicability_reviewed": true
+    },
+    "tests_and_ci": {
+      "state": "PASS",
+      "evidence": [".github/workflows/safety-checks.yml", "tests/"],
+      "rationale": "Automated tests and CI are present; a passing run is still not equivalent to overall completion.",
+      "applicability_reviewed": true
+    },
+    "security_and_privacy_review": {
+      "state": "PASS",
+      "evidence": ["SECURITY.md", "docs/COMMUNITY-SAFETY.md"],
+      "rationale": "Repository publishes security and privacy boundaries.",
+      "applicability_reviewed": true
+    },
+    "accessibility_review": {
+      "state": "UNKNOWN",
+      "evidence": ["docs/ACCESSIBILITY-INCLUSION.md"],
+      "rationale": "Accessibility guidance exists, but a P-025-specific representative accessibility acceptance review is not yet evidenced.",
+      "applicability_reviewed": true
+    },
+    "multilingual_path_considered": {
+      "state": "UNKNOWN",
+      "evidence": [],
+      "rationale": "No P-025-specific multilingual acceptance record is asserted by this fixture.",
+      "applicability_reviewed": true
+    },
+    "real_world_acceptance_test": {
+      "state": "UNKNOWN",
+      "evidence": ["docs/VERIFIED_SEQUENCE.md"],
+      "rationale": "Existing verified-sequence documentation is not automatically promoted to a canonical completion-grade real-world acceptance record by this auditor.",
+      "applicability_reviewed": true
+    },
+    "evidence_retained": {
+      "state": "PASS",
+      "evidence": ["docs/VERIFIED_SEQUENCE.md", "scripts/post_reboot_attestation.ps1"],
+      "rationale": "The project includes evidence-oriented verification and attestation material.",
+      "applicability_reviewed": true
+    },
+    "version_tag_or_release_published": {
+      "state": "UNKNOWN",
+      "evidence": [],
+      "rationale": "No completion-grade release/tag is asserted by this fixture.",
+      "applicability_reviewed": true
+    },
+    "known_limitations_documented": {
+      "state": "PASS",
+      "evidence": ["docs/TECHNICAL_NOTES.md", "docs/COMPATIBILITY.md"],
+      "rationale": "Known technical and compatibility limitations are documented.",
+      "applicability_reviewed": true
+    },
+    "contribution_and_issue_paths": {
+      "state": "PASS",
+      "evidence": ["CONTRIBUTING.md", ".github/ISSUE_TEMPLATE/vgm-support.yml"],
+      "rationale": "Public contribution and issue paths exist.",
+      "applicability_reviewed": true
+    },
+    "canonical_handover_or_build_record_updated": {
+      "state": "UNKNOWN",
+      "evidence": ["docs/DAIS-PUBLIC-BUILD-STATUS.md"],
+      "rationale": "The portfolio ledger records P-025 as IN PROGRESS; no completion handover exists yet.",
+      "applicability_reviewed": true
+    }
+  },
+  "completion_record": {
+    "project": "Unified/Variable Memory Configuration Assistant",
+    "roadmap_id": "P-025",
+    "repository": "AntonyMD7/amd-ryzen-ai-max-vgm-96gb",
+    "public_url": "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb",
+    "version": "",
+    "release_or_tag": "",
+    "completion_date": "",
+    "license": "MIT",
+    "ci_status": "",
+    "security_review": "",
+    "accessibility_review": "",
+    "beginner_path_verified": "",
+    "engineer_path_verified": "",
+    "multilingual_status": "",
+    "real_world_test": "",
+    "evidence_location": "docs/VERIFIED_SEQUENCE.md",
+    "known_limitations": "docs/TECHNICAL_NOTES.md",
+    "handover": "",
+    "final_status": "IN_PROGRESS"
+  }
+}
