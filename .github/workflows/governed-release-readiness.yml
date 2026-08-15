@@ -1,0 +1,112 @@
+name: Governed release readiness
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/governed-release-readiness.yml'
+      - 'scripts/release_governance.py'
+      - 'scripts/release_readiness_verify.py'
+      - 'scripts/public_build_completion_contract.py'
+      - 'tests/test_release_governance.py'
+      - 'tests/test_release_readiness_verify.py'
+      - 'tests/test_public_build_completion_contract.py'
+      - 'examples/public-build-completion-*.json'
+      - 'docs/RELEASE-GOVERNANCE.md'
+      - 'docs/GOVERNED-RELEASE-READINESS.md'
+  workflow_dispatch:
+    inputs:
+      candidate_tag:
+        description: 'Semantic-version candidate tag; this workflow never creates it'
+        required: true
+        type: string
+      source_commit:
+        description: 'Exact 40-character commit to verify'
+        required: true
+        type: string
+      completion_record:
+        description: 'Repository-relative canonical completion record'
+        required: true
+        default: 'examples/public-build-completion-p025-in-progress.json'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    name: Read-only release readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_commit || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check 'jsonschema>=4.23,<5' 'pytest>=8,<9'
+
+      - name: Run release-governance contract tests
+        run: |
+          python -m pytest -q \
+            tests/test_release_governance.py \
+            tests/test_release_readiness_verify.py \
+            tests/test_public_build_completion_contract.py
+
+      - name: Verify exact candidate and completion evidence
+        shell: bash
+        env:
+          DISPATCH_TAG: ${{ inputs.candidate_tag }}
+          DISPATCH_SOURCE: ${{ inputs.source_commit }}
+          DISPATCH_RECORD: ${{ inputs.completion_record }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            tag="${DISPATCH_TAG}"
+            source="${DISPATCH_SOURCE}"
+            record="${DISPATCH_RECORD}"
+          else
+            tag="v0.1.0-rc.1"
+            source="$(git rev-parse HEAD)"
+            record="examples/public-build-completion-p025-in-progress.json"
+          fi
+
+          case "$record" in
+            examples/public-build-completion-*.json) ;;
+            *) echo "completion_record outside allowlisted public examples path" >&2; exit 2 ;;
+          esac
+          test -f "$record"
+
+          python scripts/release_readiness_verify.py \
+            "$record" \
+            --tag "$tag" \
+            --source-commit "$source" \
+            --output release-readiness-evidence.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('release-readiness-evidence.json').read_text(encoding='utf-8'))
+          assert data['decision'] == 'READY_FOR_GOVERNED_RELEASE_CREATION_REVIEW'
+          assert data['completion_contract']['completion_contract_satisfied'] is False
+          assert data['truth_boundary']['readiness_is_release_publication'] is False
+          assert data['truth_boundary']['readiness_is_completion'] is False
+          assert all(value is False for value in data['execution'].values())
+          print('GOVERNED_RELEASE_READINESS=PASS')
+          print('RELEASE_CREATED=FALSE')
+          print('ROADMAP_COMPLETION_CLAIMED=FALSE')
+          PY
+
+      - name: Retain sanitized readiness evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: governed-release-readiness-${{ github.run_id }}
+          path: release-readiness-evidence.json
+          retention-days: 14
+          if-no-files-found: error
