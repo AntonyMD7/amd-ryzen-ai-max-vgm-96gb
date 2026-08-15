@@ -1,0 +1,273 @@
+name: Universal Evidence offline trusted-root acceptance
+
+on:
+  push:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  offline-trusted-root:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v3.0.6'
+
+      - name: Initialize Sigstore trust material online
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p offline-root-acceptance
+          cosign initialize > offline-root-acceptance/cosign-initialize.txt
+          root="$HOME/.sigstore/root/tuf-repo-cdn.sigstore.dev/targets/trusted_root.json"
+          test -s "$root"
+          cp "$root" offline-root-acceptance/trusted_root.json
+          sha256sum offline-root-acceptance/trusted_root.json > offline-root-acceptance/trusted_root.sha256
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          p = Path('offline-root-acceptance/trusted_root.json')
+          root = json.loads(p.read_text(encoding='utf-8'))
+          record = {
+              'schema_version': '0.1',
+              'media_type': root.get('mediaType'),
+              'trusted_root_sha256': hashlib.sha256(p.read_bytes()).hexdigest(),
+              'certificate_authority_count': len(root.get('certificateAuthorities') or []),
+              'transparency_log_count': len(root.get('tlogs') or []),
+              'timestamp_authority_count': len(root.get('timestampAuthorities') or []),
+              'source': 'cosign initialize / Sigstore public-good TUF target',
+              'long_term_validity_inferred': False,
+              'future_revocation_status_inferred': False,
+          }
+          if not record['certificate_authority_count']:
+              raise SystemExit('trusted root contains no certificate authorities')
+          if not record['transparency_log_count']:
+              raise SystemExit('trusted root contains no transparency logs')
+          if not record['timestamp_authority_count']:
+              raise SystemExit('trusted root contains no timestamp authorities')
+          Path('offline-root-acceptance/trusted-root-inspection.json').write_text(
+              json.dumps(record, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          PY
+          echo 'TRUSTED_ROOT_CAPTURE=PASS'
+
+      - name: Keyless-sign exact public fixture while online
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp examples/universal-evidence-readonly-example.json offline-root-acceptance/evidence.json
+          sha256sum offline-root-acceptance/evidence.json > offline-root-acceptance/evidence.sha256
+          printf '%s\n' "https://github.com/${GITHUB_WORKFLOW_REF}" > offline-root-acceptance/expected-identity.txt
+          printf '%s\n' 'https://token.actions.githubusercontent.com' > offline-root-acceptance/expected-issuer.txt
+          cosign sign-blob \
+            --yes \
+            --bundle offline-root-acceptance/evidence.sigstore.json \
+            offline-root-acceptance/evidence.json \
+            > offline-root-acceptance/sign.txt
+          test -s offline-root-acceptance/evidence.sigstore.json
+          echo 'ONLINE_KEYLESS_SIGNING=PASS'
+
+      - name: Inspect bundle before isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          bundle = json.loads(Path('offline-root-acceptance/evidence.sigstore.json').read_text())
+          material = bundle.get('verificationMaterial') or {}
+          tlogs = material.get('tlogEntries') or []
+          timestamps = (material.get('timestampVerificationData') or {}).get('rfc3161Timestamps') or []
+          record = {
+              'bundle_media_type': bundle.get('mediaType'),
+              'tlog_entry_count': len(tlogs),
+              'rfc3161_timestamp_count': len(timestamps),
+          }
+          if record['bundle_media_type'] != 'application/vnd.dev.sigstore.bundle.v0.3+json':
+              raise SystemExit('unexpected Sigstore bundle media type')
+          if not tlogs or not timestamps:
+              raise SystemExit('bundle lacks transparency or timestamp material')
+          Path('offline-root-acceptance/bundle-inspection.json').write_text(
+              json.dumps(record, indent=2, sort_keys=True) + '\n'
+          )
+          PY
+
+      - name: Verify with frozen trusted root inside network-isolated namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign_bin="$(command -v cosign)"
+          workspace="$PWD"
+          identity="$(cat offline-root-acceptance/expected-identity.txt)"
+          issuer="$(cat offline-root-acceptance/expected-issuer.txt)"
+
+          sudo unshare --net --mount-proc /bin/bash -c '
+            set -euo pipefail
+            cd "$1"
+            printf "=== interfaces ===\n" > offline-root-acceptance/network-namespace.txt
+            ip -brief link >> offline-root-acceptance/network-namespace.txt
+            printf "=== routes ===\n" >> offline-root-acceptance/network-namespace.txt
+            ip route show >> offline-root-acceptance/network-namespace.txt
+            test "$(ip -o link | wc -l)" -eq 1
+            ! ip route show default | grep -q .
+            HOME="$(mktemp -d)" \
+            HTTPS_PROXY=http://127.0.0.1:9 \
+            HTTP_PROXY=http://127.0.0.1:9 \
+            ALL_PROXY=http://127.0.0.1:9 \
+            NO_PROXY= \
+            "$2" verify-blob \
+              offline-root-acceptance/evidence.json \
+              --bundle offline-root-acceptance/evidence.sigstore.json \
+              --trusted-root offline-root-acceptance/trusted_root.json \
+              --certificate-identity "$3" \
+              --certificate-oidc-issuer "$4" \
+              --use-signed-timestamps \
+              > offline-root-acceptance/offline-verify.txt
+          ' _ "$workspace" "$cosign_bin" "$identity" "$issuer"
+
+          sudo chown -R "$(id -u):$(id -g)" offline-root-acceptance
+          touch offline-root-acceptance/offline-verify.ok
+          echo 'NETWORK_ISOLATED_TRUSTED_ROOT_VERIFICATION=PASS'
+
+      - name: Prove frozen trust root is security-relevant and artifact tampering still fails
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          src = json.loads(Path('offline-root-acceptance/trusted_root.json').read_text())
+          src['certificateAuthorities'] = []
+          src['tlogs'] = []
+          src['timestampAuthorities'] = []
+          Path('offline-root-acceptance/trusted_root.broken.json').write_text(
+              json.dumps(src, indent=2, sort_keys=True) + '\n'
+          )
+          tampered = Path('offline-root-acceptance/evidence.json').read_bytes() + b'\n'
+          Path('offline-root-acceptance/evidence.tampered.json').write_bytes(tampered)
+          PY
+
+          cosign_bin="$(command -v cosign)"
+          workspace="$PWD"
+          identity="$(cat offline-root-acceptance/expected-identity.txt)"
+          issuer="$(cat offline-root-acceptance/expected-issuer.txt)"
+
+          if sudo unshare --net --mount-proc /bin/bash -c '
+            set -euo pipefail
+            cd "$1"
+            HOME="$(mktemp -d)" "$2" verify-blob \
+              offline-root-acceptance/evidence.json \
+              --bundle offline-root-acceptance/evidence.sigstore.json \
+              --trusted-root offline-root-acceptance/trusted_root.broken.json \
+              --certificate-identity "$3" \
+              --certificate-oidc-issuer "$4" \
+              --use-signed-timestamps \
+              > offline-root-acceptance/broken-root-result.txt 2>&1
+          ' _ "$workspace" "$cosign_bin" "$identity" "$issuer"; then
+            echo 'Verification unexpectedly accepted an emptied trusted root.' >&2
+            exit 1
+          fi
+          touch offline-root-acceptance/broken-root-rejected.ok
+
+          if sudo unshare --net --mount-proc /bin/bash -c '
+            set -euo pipefail
+            cd "$1"
+            HOME="$(mktemp -d)" "$2" verify-blob \
+              offline-root-acceptance/evidence.tampered.json \
+              --bundle offline-root-acceptance/evidence.sigstore.json \
+              --trusted-root offline-root-acceptance/trusted_root.json \
+              --certificate-identity "$3" \
+              --certificate-oidc-issuer "$4" \
+              --use-signed-timestamps \
+              > offline-root-acceptance/tampered-result.txt 2>&1
+          ' _ "$workspace" "$cosign_bin" "$identity" "$issuer"; then
+            echo 'Verification unexpectedly accepted tampered bytes.' >&2
+            exit 1
+          fi
+          touch offline-root-acceptance/tamper-rejected.ok
+          sudo chown -R "$(id -u):$(id -g)" offline-root-acceptance
+          echo 'BROKEN_TRUST_ROOT_REJECTION=PASS'
+          echo 'OFFLINE_TAMPER_REJECTION=PASS'
+
+      - name: Write fail-honest offline-verification record
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out = Path('offline-root-acceptance')
+          verified = (out / 'offline-verify.ok').exists()
+          broken_root = (out / 'broken-root-rejected.ok').exists()
+          tamper = (out / 'tamper-rejected.ok').exists()
+          record = {
+              'schema_version': '0.1',
+              'evidence_type': 'universal-evidence-offline-trusted-root-supporting-acceptance',
+              'status': 'PASS' if all((verified, broken_root, tamper)) else 'INCOMPLETE_OR_FAILED',
+              'claims': {
+                  'verification_completed_in_linux_network_namespace': verified,
+                  'external_route_present_during_verification': False if verified else None,
+                  'explicit_frozen_trusted_root_used': verified,
+                  'signed_timestamp_verification_requested': verified,
+                  'broken_trusted_root_rejected': broken_root,
+                  'tampered_payload_rejected': tamper,
+                  'future_revocation_status_proven': False,
+                  'long_term_root_freshness_proven': False,
+                  'air_gapped_operational_readiness_proven': False,
+                  'artifact_goodness_proven': False,
+                  'semantic_truth_proven': False,
+                  'production_readiness_proven': False,
+                  'roadmap_completion_proven': False,
+              },
+              'privacy': {
+                  'credential_value_retained': False,
+                  'long_lived_private_signing_key_used': False,
+                  'private_repository_data_used': False,
+                  'user_or_device_data_used': False,
+                  'private_infrastructure_used': False,
+              },
+          }
+          (out / 'claim-boundary.json').write_text(json.dumps(record, indent=2, sort_keys=True) + '\n')
+          print(f"OFFLINE_TRUSTED_ROOT_ACCEPTANCE={record['status']}")
+          PY
+
+      - name: Enforce acceptance boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"status": "PASS"' offline-root-acceptance/claim-boundary.json
+          grep -q '"verification_completed_in_linux_network_namespace": true' offline-root-acceptance/claim-boundary.json
+          grep -q '"broken_trusted_root_rejected": true' offline-root-acceptance/claim-boundary.json
+          grep -q '"tampered_payload_rejected": true' offline-root-acceptance/claim-boundary.json
+          grep -q '"future_revocation_status_proven": false' offline-root-acceptance/claim-boundary.json
+          grep -q '"roadmap_completion_proven": false' offline-root-acceptance/claim-boundary.json
+
+      - name: Upload sanitized offline verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal-evidence-offline-trusted-root-supporting-acceptance
+          path: |
+            offline-root-acceptance/evidence.json
+            offline-root-acceptance/evidence.sha256
+            offline-root-acceptance/evidence.sigstore.json
+            offline-root-acceptance/trusted_root.json
+            offline-root-acceptance/trusted_root.sha256
+            offline-root-acceptance/trusted-root-inspection.json
+            offline-root-acceptance/bundle-inspection.json
+            offline-root-acceptance/network-namespace.txt
+            offline-root-acceptance/offline-verify.txt
+            offline-root-acceptance/broken-root-result.txt
+            offline-root-acceptance/tampered-result.txt
+            offline-root-acceptance/claim-boundary.json
+            offline-root-acceptance/expected-identity.txt
+            offline-root-acceptance/expected-issuer.txt
+          if-no-files-found: error
+          retention-days: 14
