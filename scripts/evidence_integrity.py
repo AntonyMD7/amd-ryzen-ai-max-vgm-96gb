@@ -24,10 +24,12 @@ from typing import Any, Iterable
 
 import jsonschema
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_SCHEMA = ROOT / "schemas" / "universal-evidence-v0.1.schema.json"
+INTEGRITY_SCHEMA = ROOT / "schemas" / "universal-evidence-integrity-v0.2.schema.json"
 MAX_EVIDENCE_BYTES = 5 * 1024 * 1024
+MAX_SIDECAR_BYTES = 2 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
 
 
@@ -57,6 +59,27 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise EvidenceIntegrityError(f"duplicate JSON object key rejected: {key}")
+        result[key] = value
+    return result
+
+
+def _parse_json_object(raw: bytes, *, label: str, max_bytes: int) -> dict[str, Any]:
+    if len(raw) > max_bytes:
+        raise EvidenceIntegrityError(f"{label} exceeds size limit")
+    try:
+        value = json.loads(raw.decode("utf-8"), object_pairs_hook=_strict_object)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EvidenceIntegrityError(f"{label} must be UTF-8 JSON") from exc
+    if not isinstance(value, dict):
+        raise EvidenceIntegrityError(f"{label} must be a JSON object")
+    return value
+
+
 def _iter_strings(value: Any, path: str = "$") -> Iterable[tuple[str, str]]:
     if isinstance(value, str):
         yield path, value
@@ -68,29 +91,23 @@ def _iter_strings(value: Any, path: str = "$") -> Iterable[tuple[str, str]]:
             yield from _iter_strings(item, f"{path}[{index}]")
 
 
-def _parse_evidence_bytes(raw: bytes) -> dict[str, Any]:
-    if len(raw) > MAX_EVIDENCE_BYTES:
-        raise EvidenceIntegrityError("evidence exceeds size limit")
-    try:
-        value = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise EvidenceIntegrityError("evidence must be UTF-8 JSON") from exc
-    if not isinstance(value, dict):
-        raise EvidenceIntegrityError("evidence must be a JSON object")
-    return value
+def _load_schema(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_strict_object)
 
 
-def _validate_schema(record: dict[str, Any]) -> None:
-    schema = json.loads(EVIDENCE_SCHEMA.read_text(encoding="utf-8"))
-    validator = jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
+def _validate_with_schema(record: dict[str, Any], path: Path, *, label: str) -> None:
+    validator = jsonschema.Draft202012Validator(
+        _load_schema(path),
+        format_checker=jsonschema.FormatChecker(),
+    )
     errors = sorted(validator.iter_errors(record), key=lambda item: list(item.absolute_path))
     if errors:
         error = errors[0]
-        path = "$" + "".join(
+        location = "$" + "".join(
             f"[{part}]" if isinstance(part, int) else f".{part}"
             for part in error.absolute_path
         )
-        raise EvidenceIntegrityError(f"schema validation failed at {path}: {error.message}")
+        raise EvidenceIntegrityError(f"{label} schema validation failed at {location}: {error.message}")
 
 
 def _validate_semantics(record: dict[str, Any]) -> None:
@@ -122,13 +139,16 @@ def _privacy_prefilter(record: dict[str, Any]) -> None:
 def _normalized_bytes(record: dict[str, Any]) -> bytes:
     # Project-local diagnostic normalization only. This is intentionally NOT
     # presented as RFC 8785/JCS conformance and must not become a signature format.
-    return json.dumps(
-        record,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
+    try:
+        return json.dumps(
+            record,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise EvidenceIntegrityError("evidence cannot be represented by DAIS_SORTED_JSON_V0.1") from exc
 
 
 def _safe_artifact_path(root: Path, name: str) -> Path:
@@ -140,7 +160,10 @@ def _safe_artifact_path(root: Path, name: str) -> Path:
         current = current / part
         if current.exists() and current.is_symlink():
             raise EvidenceIntegrityError(f"symlink artifact path refused: {name}")
-    resolved = (root / rel).resolve(strict=True)
+    try:
+        resolved = (root / rel).resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise EvidenceIntegrityError(f"artifact not found: {name}") from exc
     try:
         resolved.relative_to(root)
     except ValueError as exc:
@@ -173,12 +196,12 @@ def _artifact_bindings(record: dict[str, Any], artifact_root: Path | None) -> li
 
 
 def create_sidecar(raw: bytes, *, artifact_root: Path | None = None) -> dict[str, Any]:
-    record = _parse_evidence_bytes(raw)
-    _validate_schema(record)
+    record = _parse_json_object(raw, label="evidence", max_bytes=MAX_EVIDENCE_BYTES)
+    _validate_with_schema(record, EVIDENCE_SCHEMA, label="evidence")
     _validate_semantics(record)
     _privacy_prefilter(record)
     normalized = _normalized_bytes(record)
-    return {
+    sidecar = {
         "schema_version": "0.2",
         "sidecar_type": "dais-universal-evidence-integrity",
         "evidence_id": record["evidence_id"],
@@ -211,30 +234,33 @@ def create_sidecar(raw: bytes, *, artifact_root: Path | None = None) -> dict[str
             "SHA-256 integrity can detect changed bytes but does not identify who produced the evidence.",
             "DAIS_SORTED_JSON_V0.1 is a project diagnostic normalization profile, not RFC 8785/JCS conformance.",
             "A future signing layer should use a reviewed typed-envelope/signature standard such as DSSE rather than treating this sidecar as a signature.",
-            "Schema, semantic and privacy-prefilter success do not prove that reported observations are true.",
+            "Schema, semantic and privacy-prefilter success do not prove that reported observations are true."
         ],
     }
+    _validate_with_schema(sidecar, INTEGRITY_SCHEMA, label="sidecar")
+    return sidecar
 
 
 def verify_sidecar(raw: bytes, sidecar: dict[str, Any], *, artifact_root: Path | None = None) -> dict[str, Any]:
+    _validate_with_schema(sidecar, INTEGRITY_SCHEMA, label="sidecar")
     expected = create_sidecar(raw, artifact_root=artifact_root)
-    if sidecar.get("sidecar_type") != "dais-universal-evidence-integrity":
-        raise EvidenceIntegrityError("unknown sidecar type")
-    if sidecar.get("evidence_id") != expected["evidence_id"]:
+    if sidecar["evidence_id"] != expected["evidence_id"]:
         raise EvidenceIntegrityError("evidence_id mismatch")
-    supplied_hashes = sidecar.get("hashes", {})
     for name, digest in expected["hashes"].items():
-        if supplied_hashes.get(name) != digest:
+        if sidecar["hashes"].get(name) != digest:
             raise EvidenceIntegrityError(f"integrity digest mismatch: {name}")
 
-    supplied_bindings = sidecar.get("artifact_bindings", [])
+    supplied_bindings = sidecar["artifact_bindings"]
     if len(supplied_bindings) != len(expected["artifact_bindings"]):
         raise EvidenceIntegrityError("artifact binding count mismatch")
     for supplied, current in zip(supplied_bindings, expected["artifact_bindings"]):
         if supplied.get("name") != current.get("name") or supplied.get("declared_sha256") != current.get("declared_sha256"):
             raise EvidenceIntegrityError("artifact binding mismatch")
-        if artifact_root is not None and current.get("verified_from_root") is not True:
-            raise EvidenceIntegrityError("artifact root verification was not completed")
+        if artifact_root is not None:
+            if current.get("verified_from_root") is not True:
+                raise EvidenceIntegrityError("artifact root verification was not completed")
+            if supplied.get("observed_sha256") != current.get("observed_sha256"):
+                raise EvidenceIntegrityError("artifact observed digest mismatch")
 
     return {
         "status": "INTEGRITY_VERIFIED_NOT_TRUST_VERIFIED",
@@ -248,10 +274,10 @@ def verify_sidecar(raw: bytes, sidecar: dict[str, Any], *, artifact_root: Path |
     }
 
 
-def _read_bytes(path: Path) -> bytes:
+def _read_bytes(path: Path, *, label: str, limit: int) -> bytes:
     data = path.read_bytes()
-    if len(data) > MAX_EVIDENCE_BYTES:
-        raise EvidenceIntegrityError("evidence exceeds size limit")
+    if len(data) > limit:
+        raise EvidenceIntegrityError(f"{label} exceeds size limit")
     return data
 
 
@@ -271,7 +297,7 @@ def main() -> int:
 
     args = parser.parse_args()
     try:
-        raw = _read_bytes(args.evidence)
+        raw = _read_bytes(args.evidence, label="evidence", limit=MAX_EVIDENCE_BYTES)
         if args.mode == "create":
             result = create_sidecar(raw, artifact_root=args.artifact_root)
             text = json.dumps(result, indent=2, sort_keys=True) + "\n"
@@ -280,10 +306,11 @@ def main() -> int:
             else:
                 print(text, end="")
         else:
-            sidecar = json.loads(args.sidecar.read_text(encoding="utf-8"))
+            sidecar_raw = _read_bytes(args.sidecar, label="sidecar", limit=MAX_SIDECAR_BYTES)
+            sidecar = _parse_json_object(sidecar_raw, label="sidecar", max_bytes=MAX_SIDECAR_BYTES)
             result = verify_sidecar(raw, sidecar, artifact_root=args.artifact_root)
             print(json.dumps(result, indent=2, sort_keys=True))
-    except (OSError, json.JSONDecodeError, EvidenceIntegrityError) as exc:
+    except (OSError, EvidenceIntegrityError) as exc:
         print(json.dumps({"status": "REJECTED", "reason": str(exc)}, indent=2, sort_keys=True))
         return 2
     return 0
