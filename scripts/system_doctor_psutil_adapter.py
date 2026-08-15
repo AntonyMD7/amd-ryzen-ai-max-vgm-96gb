@@ -20,7 +20,10 @@ from pathlib import Path
 import platform
 from typing import Any
 
-import psutil
+try:
+    import psutil  # type: ignore
+except ImportError:  # core repository CI does not need the optional adapter dependency
+    psutil = None  # type: ignore
 
 from system_doctor_evidence_fusion import fuse_case
 
@@ -39,6 +42,8 @@ def _ratio_status(available: int, total: int, kind: str) -> tuple[str, str, str]
 
 
 def collect_source_evidence(root: Path | None = None) -> dict[str, Any]:
+    if psutil is None:
+        raise RuntimeError("psutil is required for this optional bounded adapter")
     checked_root = root or Path(Path.cwd().anchor or "/")
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage(str(checked_root))
