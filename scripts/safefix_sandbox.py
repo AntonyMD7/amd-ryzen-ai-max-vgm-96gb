@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""SafeFix v0.3 sandbox acceptance adapter.
+"""SafeFix v0.4 sandbox acceptance adapter.
 
 This module proves recovery-first lifecycle mechanics without touching a real
 operating system, service, device, package manager, firmware setting, or network.
 It will only mutate regular files underneath a directory containing an explicit
 ``.safefix-sandbox`` marker. It has no shell/command executor.
 
-v0.3 adds a local transaction journal so interrupted sandbox mutations can be
+v0.3 added a local transaction journal so interrupted sandbox mutations can be
 classified and recovery-snapshot corruption is detected before rollback.
-It remains an acceptance harness for F-01 SafeFix, not a production repair engine.
+v0.4 adds explicit Linux parent-directory fsync barriers around durable directory
+creation and atomic replacement. This narrows a durability gap but does not prove
+power-loss atomicity or production safety on any filesystem or hardware stack.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 import tempfile
 from typing import Any
 
@@ -40,6 +43,74 @@ def _utcnow() -> str:
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _durability_profile() -> dict[str, Any]:
+    """Describe barriers this adapter can honestly claim on the current host.
+
+    Linux receives a parent-directory fsync after each atomic replace and after
+    each newly created recovery-directory entry. Other platforms retain the
+    pre-existing file-fsync + atomic-replace behavior but make no directory
+    durability claim because Python does not expose one portable contract here.
+    """
+    linux_directory_fsync = sys.platform.startswith("linux") and hasattr(os, "O_DIRECTORY")
+    return {
+        "file_fsync_before_replace": True,
+        "atomic_replace_requested": True,
+        "linux_parent_directory_fsync_after_replace": linux_directory_fsync,
+        "linux_parent_directory_fsync_after_recovery_mkdir": linux_directory_fsync,
+        "power_loss_atomicity_proven": False,
+        "filesystem_specific_crash_consistency_proven": False,
+        "hardware_write_cache_durability_proven": False,
+    }
+
+
+def _sync_directory(directory: Path) -> bool:
+    """Issue a fail-closed Linux directory fsync barrier when supported.
+
+    A failure is surfaced because silently continuing after an attempted
+    durability barrier would overstate the retained evidence. Non-Linux hosts
+    return False and the public evidence explicitly records that limitation.
+    """
+    profile = _durability_profile()
+    if not profile["linux_parent_directory_fsync_after_replace"]:
+        return False
+    flags = os.O_RDONLY | os.O_DIRECTORY
+    try:
+        fd = os.open(directory, flags)
+    except OSError as exc:
+        raise SandboxSafeFixError("linux directory durability barrier open failed") from exc
+    try:
+        os.fsync(fd)
+    except OSError as exc:
+        raise SandboxSafeFixError("linux directory durability barrier fsync failed") from exc
+    finally:
+        os.close(fd)
+    return True
+
+
+def _mkdir_recovery_chain(sandbox: Path, directory: Path) -> None:
+    """Create a recovery directory path one component at a time.
+
+    On Linux, each new child directory is followed by fsync of its parent so
+    the directory-entry creation is not silently treated as durable merely
+    because mkdir returned successfully.
+    """
+    try:
+        rel = directory.relative_to(sandbox)
+    except ValueError as exc:
+        raise SandboxSafeFixError("recovery directory escapes sandbox") from exc
+
+    cursor = sandbox
+    for part in rel.parts:
+        child = cursor / part
+        if child.exists():
+            if not child.is_dir() or child.is_symlink():
+                raise SandboxSafeFixError("recovery path contains non-directory or symlink component")
+        else:
+            child.mkdir()
+            _sync_directory(cursor)
+        cursor = child
 
 
 def _validated_root(root: str | Path) -> Path:
@@ -102,6 +173,7 @@ def _atomic_write(path: Path, data: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_name, path)
+        _sync_directory(path.parent)
     finally:
         try:
             Path(tmp_name).unlink(missing_ok=True)
@@ -124,7 +196,7 @@ def _read_manifest(recovery_root: Path) -> dict[str, Any]:
         record = json.loads(_read_regular_file(path).decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SandboxSafeFixError("recovery transaction manifest is invalid") from exc
-    if record.get("schema_version") != "0.3":
+    if record.get("schema_version") not in {"0.3", "0.4"}:
         raise SandboxSafeFixError("unsupported recovery transaction manifest")
     return record
 
@@ -161,7 +233,7 @@ def inspect_recovery(
         observed_state = "DIVERGED_STATE_PRESENT"
 
     return {
-        "schema_version": "0.3",
+        "schema_version": "0.4",
         "evidence_type": "safefix-sandbox-recovery-inspection",
         "transaction_id": tx,
         "mode": "SANDBOX_ONLY",
@@ -172,6 +244,7 @@ def inspect_recovery(
         "before_sha256": record.get("before_sha256"),
         "desired_sha256": record.get("desired_sha256"),
         "recovery_sha256": recovery_sha,
+        "durability_barrier_profile": record.get("durability_barrier_profile"),
         "mutation_performed": False,
         "production_safe_to_infer": False,
     }
@@ -193,6 +266,7 @@ def apply_text_change(
     target, rel = _validated_target(sandbox, relative_path)
     before = _read_regular_file(target)
     before_sha = _sha256(before)
+    durability = _durability_profile()
 
     if expected_before_sha256 is not None and expected_before_sha256 != before_sha:
         raise SandboxSafeFixError("precondition failed: before-state digest mismatch")
@@ -204,7 +278,7 @@ def apply_text_change(
 
     if desired_sha == before_sha:
         return {
-            "schema_version": "0.3",
+            "schema_version": "0.4",
             "evidence_type": "safefix-sandbox-acceptance",
             "transaction_id": tx,
             "status": "NOOP_ATTESTED",
@@ -214,6 +288,7 @@ def apply_text_change(
             "completed_at_utc": _utcnow(),
             "before_sha256": before_sha,
             "after_sha256": before_sha,
+            "durability_barrier_profile": durability,
             "mutation_performed": False,
             "approval_present": bool(approval_present),
             "recovery_snapshot_created": False,
@@ -228,14 +303,14 @@ def apply_text_change(
     recovery_file = recovery_root / rel
     if recovery_root.exists():
         raise SandboxSafeFixError("transaction_id already has recovery state; replay refused")
-    recovery_file.parent.mkdir(parents=True, exist_ok=False)
+    _mkdir_recovery_chain(sandbox, recovery_file.parent)
     _atomic_write(recovery_file, before)
     snapshot_sha = _sha256(_read_regular_file(recovery_file))
     if snapshot_sha != before_sha:
         raise SandboxSafeFixError("recovery snapshot attestation failed before mutation")
 
     manifest: dict[str, Any] = {
-        "schema_version": "0.3",
+        "schema_version": "0.4",
         "transaction_id": tx,
         "target": rel.as_posix(),
         "phase": "PREPARED",
@@ -243,6 +318,7 @@ def apply_text_change(
         "before_sha256": before_sha,
         "desired_sha256": desired_sha,
         "recovery_sha256": snapshot_sha,
+        "durability_barrier_profile": durability,
         "production_safe_to_infer": False,
     }
     _write_manifest(recovery_root, manifest)
@@ -262,7 +338,7 @@ def apply_text_change(
     _write_manifest(recovery_root, manifest)
 
     return {
-        "schema_version": "0.3",
+        "schema_version": "0.4",
         "evidence_type": "safefix-sandbox-acceptance",
         "transaction_id": tx,
         "status": "MUTATION_ATTESTED",
@@ -275,6 +351,7 @@ def apply_text_change(
         "recovery_sha256": snapshot_sha,
         "after_sha256": after_sha,
         "journal_phase": "COMMITTED",
+        "durability_barrier_profile": durability,
         "mutation_performed": True,
         "approval_present": True,
         "recovery_snapshot_created": True,
@@ -322,7 +399,7 @@ def rollback(
     _write_manifest(recovery_root, manifest)
 
     return {
-        "schema_version": "0.3",
+        "schema_version": "0.4",
         "evidence_type": "safefix-sandbox-rollback",
         "transaction_id": tx,
         "status": "ROLLBACK_ATTESTED",
@@ -334,6 +411,7 @@ def rollback(
         "recovery_sha256": recovery_sha,
         "restored_sha256": restored_sha,
         "journal_phase": "ROLLED_BACK",
+        "durability_barrier_profile": manifest.get("durability_barrier_profile"),
         "rollback_performed": True,
         "post_rollback_attested": True,
         "production_safe_to_infer": False,
