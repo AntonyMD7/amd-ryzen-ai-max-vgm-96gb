@@ -1,0 +1,142 @@
+{
+  "schema_version": "0.1",
+  "subject_id": "P-025",
+  "status": "COMPLETE",
+  "gates": {
+    "problem_and_intended_users_defined": {
+      "state": "PASS",
+      "evidence": ["README.md"],
+      "rationale": "The public README defines the AMD Ryzen AI Max VGM problem and intended operator audience.",
+      "applicability_reviewed": true
+    },
+    "public_repository_or_distribution_surface_exists": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb"],
+      "rationale": "Public GitHub repository exists.",
+      "applicability_reviewed": true
+    },
+    "explicit_open_source_license": {
+      "state": "PASS",
+      "evidence": ["LICENSE"],
+      "rationale": "Repository contains the MIT License.",
+      "applicability_reviewed": true
+    },
+    "complete_readme": {
+      "state": "PASS",
+      "evidence": ["README.md"],
+      "rationale": "Repository README is present and substantive.",
+      "applicability_reviewed": true
+    },
+    "beginner_start_here_path": {
+      "state": "PASS",
+      "evidence": ["START-HERE.md", "docs/BEGINNER-GUIDE.md"],
+      "rationale": "Beginner entry points are public.",
+      "applicability_reviewed": true
+    },
+    "engineering_or_architecture_documentation": {
+      "state": "PASS",
+      "evidence": ["docs/ARCHITECTURE.md", "docs/TECHNICAL_NOTES.md"],
+      "rationale": "Engineering and architecture documentation exists.",
+      "applicability_reviewed": true
+    },
+    "reproducible_installation_or_use_instructions": {
+      "state": "PASS",
+      "evidence": ["docs/VERIFIED_SEQUENCE.md", "START-HERE.md"],
+      "rationale": "A reproducible operator sequence is documented.",
+      "applicability_reviewed": true
+    },
+    "safety_scope_and_limitations": {
+      "state": "PASS",
+      "evidence": ["docs/COMMUNITY-SAFETY.md", "docs/TECHNICAL_NOTES.md", "docs/RECOVERY.md"],
+      "rationale": "Safety boundaries, recovery prerequisites and limitations are documented.",
+      "applicability_reviewed": true
+    },
+    "recovery_or_rollback_guidance_for_mutating_tools": {
+      "state": "PASS",
+      "evidence": ["docs/RECOVERY.md", "docs/VERIFIED_SEQUENCE.md"],
+      "rationale": "Recovery guidance exists and the verified reference sequence established recovery before mutation.",
+      "applicability_reviewed": true
+    },
+    "tests_and_ci": {
+      "state": "PASS",
+      "evidence": [".github/workflows/safety-checks.yml", ".github/workflows/governed-release-readiness.yml", ".github/workflows/p025-governed-release-v0.1.0.yml", "tests/"],
+      "rationale": "Automated safety tests, exact-main readiness acceptance and the governed release workflow are retained. CI is supporting evidence, not the sole completion basis.",
+      "applicability_reviewed": true
+    },
+    "security_and_privacy_review": {
+      "state": "PASS",
+      "evidence": ["SECURITY.md", "docs/COMMUNITY-SAFETY.md", "docs/P025-COMPLETION-READINESS.md", "docs/RELEASE-GOVERNANCE.md"],
+      "rationale": "Repository publishes security/privacy boundaries; release publication used a reviewed least-privilege draft-then-publish workflow and retained sanitized evidence.",
+      "applicability_reviewed": true
+    },
+    "accessibility_review": {
+      "state": "PASS",
+      "evidence": ["docs/P025-COMPLETION-READINESS.md", "docs/ACCESSIBILITY-INCLUSION.md"],
+      "rationale": "A P-025-specific accessibility review is retained with explicit limitations; this is not WCAG conformance or assistive-technology user acceptance.",
+      "applicability_reviewed": true
+    },
+    "multilingual_path_considered": {
+      "state": "PASS",
+      "evidence": ["docs/P025-COMPLETION-READINESS.md"],
+      "rationale": "A language-neutral evidence-to-localized-explanation path is documented; current P-025 public documentation remains primarily English and multilingual acceptance remains a known limitation.",
+      "applicability_reviewed": true
+    },
+    "real_world_acceptance_test": {
+      "state": "PASS",
+      "evidence": ["docs/VERIFIED_SEQUENCE.md", "docs/P025-COMPLETION-READINESS.md"],
+      "rationale": "The verified sequence records a real compatible 128 GB Ryzen AI Max reference system changing from 64/64 to 96/32, rebooting, returning recovery services, and passing independent post-state/GUI verification. Scope is limited to that reference configuration.",
+      "applicability_reviewed": true
+    },
+    "evidence_retained": {
+      "state": "PASS",
+      "evidence": ["docs/VERIFIED_SEQUENCE.md", "scripts/vgm_readonly_probe.py", "scripts/post_reboot_attestation.ps1", "docs/P025-COMPLETION-RECORD-v0.1.0.md"],
+      "rationale": "Preflight, real-world verification, post-reboot attestation, exact-main release readiness, release publication and exact tag-target evidence are retained or canonically referenced.",
+      "applicability_reviewed": true
+    },
+    "version_tag_or_release_published": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/releases/tag/v0.1.0", "docs/P025-COMPLETION-RECORD-v0.1.0.md"],
+      "rationale": "GitHub release v0.1.0 was published on 2026-08-15. Its tag was independently resolved to exact attested source commit 704f7bab429b1f67896b32bf90b99d3d0d9cd39c after publication.",
+      "applicability_reviewed": true
+    },
+    "known_limitations_documented": {
+      "state": "PASS",
+      "evidence": ["docs/TECHNICAL_NOTES.md", "docs/COMPATIBILITY.md", "docs/P025-COMPLETION-READINESS.md", "RELEASE-NOTES-v0.1.0.md"],
+      "rationale": "Technical, compatibility, accessibility, multilingual and acceptance-scope limitations are public and are repeated in the v0.1.0 release notes.",
+      "applicability_reviewed": true
+    },
+    "contribution_and_issue_paths": {
+      "state": "PASS",
+      "evidence": ["CONTRIBUTING.md", ".github/ISSUE_TEMPLATE/vgm-support.yml"],
+      "rationale": "Public contribution and structured issue paths exist.",
+      "applicability_reviewed": true
+    },
+    "canonical_handover_or_build_record_updated": {
+      "state": "PASS",
+      "evidence": ["docs/P025-COMPLETION-RECORD-v0.1.0.md", "docs/DAIS-PUBLIC-BUILD-STATUS.md"],
+      "rationale": "The final public completion record binds P-025 to v0.1.0, its exact source commit, release publication evidence, retained real-world acceptance and explicit limitations. Canonical DAIS portfolio synchronization remains a separate downstream record update and does not invalidate this public build record.",
+      "applicability_reviewed": true
+    }
+  },
+  "completion_record": {
+    "project": "Unified/Variable Memory Configuration Assistant",
+    "roadmap_id": "P-025",
+    "repository": "AntonyMD7/amd-ryzen-ai-max-vgm-96gb",
+    "public_url": "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb",
+    "version": "0.1.0",
+    "release_or_tag": "v0.1.0",
+    "completion_date": "2026-08-15",
+    "license": "MIT",
+    "ci_status": "PASS — governed release run 31879002294 plus repository safety/readiness CI; release tag target independently verified after publication",
+    "security_review": "SECURITY.md + docs/COMMUNITY-SAFETY.md + docs/P025-COMPLETION-READINESS.md + docs/RELEASE-GOVERNANCE.md",
+    "accessibility_review": "PASS WITH LIMITATIONS — docs/P025-COMPLETION-READINESS.md; not a WCAG conformance claim",
+    "beginner_path_verified": "START-HERE.md + docs/BEGINNER-GUIDE.md",
+    "engineer_path_verified": "docs/ARCHITECTURE.md + docs/TECHNICAL_NOTES.md + docs/VERIFIED_SEQUENCE.md",
+    "multilingual_status": "PATH CONSIDERED; public P-025 documentation remains primarily English",
+    "real_world_test": "PASS FOR REFERENCE CONFIGURATION — docs/VERIFIED_SEQUENCE.md",
+    "evidence_location": "docs/VERIFIED_SEQUENCE.md; docs/P025-COMPLETION-RECORD-v0.1.0.md; GitHub release v0.1.0; governed release workflow run 31879002294",
+    "known_limitations": "docs/TECHNICAL_NOTES.md; docs/COMPATIBILITY.md; docs/P025-COMPLETION-READINESS.md; RELEASE-NOTES-v0.1.0.md",
+    "handover": "docs/P025-COMPLETION-RECORD-v0.1.0.md",
+    "final_status": "COMPLETE"
+  }
+}
