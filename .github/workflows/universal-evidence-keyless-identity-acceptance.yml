@@ -1,0 +1,235 @@
+name: Universal Evidence keyless identity acceptance
+
+on:
+  push:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  keyless-identity-transparency:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v3.0.6'
+
+      - name: Prepare exact public fixture and expected identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p keyless-acceptance
+          cp examples/universal-evidence-readonly-example.json keyless-acceptance/evidence.json
+          sha256sum keyless-acceptance/evidence.json > keyless-acceptance/evidence.sha256
+          printf '%s\n' "https://github.com/${GITHUB_WORKFLOW_REF}" > keyless-acceptance/expected-identity.txt
+          printf '%s\n' 'https://token.actions.githubusercontent.com' > keyless-acceptance/expected-issuer.txt
+          echo 'SIGNER_IDENTITY_SOURCE=GITHUB_ACTIONS_WORKFLOW_REF'
+          echo 'PRODUCTION_CREDENTIAL_USED=FALSE'
+
+      - name: Keyless-sign exact Universal Evidence fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign sign-blob \
+            --yes \
+            --bundle keyless-acceptance/evidence.sigstore.json \
+            keyless-acceptance/evidence.json \
+            > keyless-acceptance/sign.txt
+          test -s keyless-acceptance/evidence.sigstore.json
+          touch keyless-acceptance/sign.ok
+          echo 'KEYLESS_SIGNING=PASS'
+
+      - name: Verify exact workflow identity issuer transparency and signed timestamp
+        shell: bash
+        run: |
+          set -euo pipefail
+          identity="$(cat keyless-acceptance/expected-identity.txt)"
+          issuer="$(cat keyless-acceptance/expected-issuer.txt)"
+          cosign verify-blob \
+            keyless-acceptance/evidence.json \
+            --bundle keyless-acceptance/evidence.sigstore.json \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" \
+            > keyless-acceptance/verify-exact.txt
+          touch keyless-acceptance/verify-exact.ok
+          echo 'KEYLESS_EXACT_IDENTITY_VERIFICATION=PASS'
+
+      - name: Prove wrong identity and tampered bytes fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          issuer="$(cat keyless-acceptance/expected-issuer.txt)"
+          if cosign verify-blob \
+            keyless-acceptance/evidence.json \
+            --bundle keyless-acceptance/evidence.sigstore.json \
+            --certificate-identity 'https://github.com/example/incorrect/.github/workflows/incorrect.yml@refs/heads/main' \
+            --certificate-oidc-issuer "$issuer" \
+            > keyless-acceptance/verify-wrong-identity.txt 2>&1; then
+            echo 'Wrong identity unexpectedly verified.' >&2
+            exit 1
+          fi
+          touch keyless-acceptance/wrong-identity-rejected.ok
+
+          cp keyless-acceptance/evidence.json keyless-acceptance/evidence-tampered.json
+          printf '\n' >> keyless-acceptance/evidence-tampered.json
+          identity="$(cat keyless-acceptance/expected-identity.txt)"
+          if cosign verify-blob \
+            keyless-acceptance/evidence-tampered.json \
+            --bundle keyless-acceptance/evidence.sigstore.json \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" \
+            > keyless-acceptance/verify-tampered.txt 2>&1; then
+            echo 'Tampered blob unexpectedly verified.' >&2
+            exit 1
+          fi
+          touch keyless-acceptance/tamper-rejected.ok
+          echo 'WRONG_IDENTITY_REJECTION=PASS'
+          echo 'TAMPER_REJECTION=PASS'
+
+      - name: Generate normalized verifier observation and exact trust profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          out = Path('keyless-acceptance')
+          evidence = out / 'evidence.json'
+          digest = hashlib.sha256(evidence.read_bytes()).hexdigest()
+          identity = (out / 'expected-identity.txt').read_text(encoding='utf-8').strip()
+          issuer = (out / 'expected-issuer.txt').read_text(encoding='utf-8').strip()
+
+          profile = {
+              'schema_version': '0.1',
+              'profile_id': 'github-actions-keyless-exact-v0.1',
+              'artifact': {'sha256': digest},
+              'signer': {
+                  'mode': 'SIGSTORE_KEYLESS',
+                  'exact_identity': identity,
+                  'exact_oidc_issuer': issuer,
+              },
+              'transparency': {'required': True},
+              'timestamp': {
+                  'required': True,
+                  'accepted_sources': ['SIGSTORE_TSA'],
+              },
+              'provenance': {
+                  'builder_id_required': False,
+                  'allowed_builder_ids': [],
+              },
+              'claims': {
+                  'artifact_goodness_inferred': False,
+                  'semantic_truth_inferred': False,
+              },
+          }
+          observation = {
+              'artifact_sha256': digest,
+              'cryptographic_signature_verified': (out / 'verify-exact.ok').exists(),
+              'certificate_identity': identity,
+              'certificate_oidc_issuer': issuer,
+              'transparency_verified': (out / 'verify-exact.ok').exists(),
+              'timestamp_verified': (out / 'verify-exact.ok').exists(),
+              'timestamp_source': 'SIGSTORE_TSA',
+              'provenance_verified': False,
+              'builder_id': None,
+              'verifier': 'cosign-v3.0.6-keyless-bundle',
+          }
+          (out / 'trust-profile.json').write_text(json.dumps(profile, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          (out / 'verifier-observation.json').write_text(json.dumps(observation, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+          python scripts/evidence_trust_policy.py \
+            keyless-acceptance/trust-profile.json \
+            keyless-acceptance/verifier-observation.json \
+            > keyless-acceptance/trust-policy-result.json
+
+          grep -q '"policy_status": "POLICY_SATISFIED"' keyless-acceptance/trust-policy-result.json
+          grep -q '"artifact_goodness_proven": false' keyless-acceptance/trust-policy-result.json
+          grep -q '"semantic_truth_proven": false' keyless-acceptance/trust-policy-result.json
+          touch keyless-acceptance/trust-policy.ok
+          echo 'EXACT_TRUST_POLICY=PASS'
+
+      - name: Write fail-honest acceptance record
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          out = Path('keyless-acceptance')
+          exact = (out / 'verify-exact.ok').exists()
+          wrong_identity = (out / 'wrong-identity-rejected.ok').exists()
+          tamper = (out / 'tamper-rejected.ok').exists()
+          policy = (out / 'trust-policy.ok').exists()
+          record = {
+              'schema_version': '0.1',
+              'evidence_type': 'universal-evidence-keyless-identity-supporting-acceptance',
+              'tool': {'name': 'cosign', 'version_pin': 'v3.0.6'},
+              'fixture': 'examples/universal-evidence-readonly-example.json',
+              'status': 'PASS' if all((exact, wrong_identity, tamper, policy)) else 'INCOMPLETE_OR_FAILED',
+              'claims': {
+                  'cryptographic_signature_verified': exact,
+                  'signer_identity_verified': exact,
+                  'oidc_issuer_verified': exact,
+                  'transparency_log_inclusion_verified': exact,
+                  'trusted_timestamp_verified': exact,
+                  'wrong_identity_rejected': wrong_identity,
+                  'tampered_payload_rejected': tamper,
+                  'exact_trust_policy_satisfied': policy,
+                  'slsa_conformance_verified': False,
+                  'builder_identity_verified': False,
+                  'artifact_goodness_proven': False,
+                  'statement_semantic_truth_verified': False,
+                  'production_readiness_proven': False,
+              },
+              'privacy': {
+                  'long_lived_signing_key_used': False,
+                  'credential_value_retained': False,
+                  'user_data_used': False,
+                  'private_infrastructure_used': False,
+              },
+          }
+          (out / 'claim-boundary.json').write_text(json.dumps(record, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f"KEYLESS_IDENTITY_ACCEPTANCE={record['status']}")
+          PY
+
+      - name: Enforce final acceptance boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"status": "PASS"' keyless-acceptance/claim-boundary.json
+          grep -q '"signer_identity_verified": true' keyless-acceptance/claim-boundary.json
+          grep -q '"transparency_log_inclusion_verified": true' keyless-acceptance/claim-boundary.json
+          grep -q '"trusted_timestamp_verified": true' keyless-acceptance/claim-boundary.json
+          grep -q '"slsa_conformance_verified": false' keyless-acceptance/claim-boundary.json
+          grep -q '"artifact_goodness_proven": false' keyless-acceptance/claim-boundary.json
+
+      - name: Upload sanitized keyless acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal-evidence-keyless-identity-supporting-acceptance
+          path: |
+            keyless-acceptance/evidence.json
+            keyless-acceptance/evidence.sha256
+            keyless-acceptance/evidence.sigstore.json
+            keyless-acceptance/expected-identity.txt
+            keyless-acceptance/expected-issuer.txt
+            keyless-acceptance/sign.txt
+            keyless-acceptance/verify-exact.txt
+            keyless-acceptance/verify-wrong-identity.txt
+            keyless-acceptance/verify-tampered.txt
+            keyless-acceptance/trust-profile.json
+            keyless-acceptance/verifier-observation.json
+            keyless-acceptance/trust-policy-result.json
+            keyless-acceptance/claim-boundary.json
+          if-no-files-found: error
+          retention-days: 14
