@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/schemas/hardware-compatibility-report-v0.2.schema.json",
+  "title": "Hardware Compatibility Commons public report v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "hardware",
+    "software",
+    "configuration",
+    "observation",
+    "evidence",
+    "provenance",
+    "privacy",
+    "claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.2"},
+    "report_id": {
+      "type": "string",
+      "pattern": "^HCC-[A-Z0-9][A-Z0-9._-]{7,63}$"
+    },
+    "hardware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vendor", "model", "architecture", "accelerator"],
+      "properties": {
+        "vendor": {"type": "string", "minLength": 1, "maxLength": 120},
+        "model": {"type": "string", "minLength": 1, "maxLength": 180},
+        "architecture": {"type": "string", "minLength": 1, "maxLength": 80},
+        "memory_gib": {"type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 16384},
+        "accelerator": {"type": ["string", "null"], "maxLength": 180},
+        "device_class": {
+          "enum": ["SYSTEM", "CPU", "GPU", "NPU", "STORAGE", "NETWORK", "PERIPHERAL", "FIRMWARE_DEVICE", "OTHER"]
+        }
+      }
+    },
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "os_version"],
+      "properties": {
+        "os": {"type": "string", "minLength": 1, "maxLength": 80},
+        "os_version": {"type": "string", "minLength": 1, "maxLength": 160},
+        "kernel": {"type": ["string", "null"], "maxLength": 180},
+        "driver": {"type": ["string", "null"], "maxLength": 240},
+        "runtime": {"type": ["string", "null"], "maxLength": 240},
+        "firmware": {"type": ["string", "null"], "maxLength": 240}
+      }
+    },
+    "configuration": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "value"],
+        "properties": {
+          "key": {"type": "string", "pattern": "^[A-Za-z0-9_.:/-]{1,80}$"},
+          "value": {"type": "string", "minLength": 1, "maxLength": 300}
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "observed_at_utc", "summary", "reproduction_runs"],
+      "properties": {
+        "status": {
+          "enum": [
+            "VERIFIED_WORKING",
+            "VERIFIED_FAILING",
+            "PARTIAL",
+            "COMMUNITY_REPORTED",
+            "UNKNOWN",
+            "SYNTHETIC_CONFORMANCE_ONLY"
+          ]
+        },
+        "observed_at_utc": {"type": "string", "format": "date-time"},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "reproduction_runs": {"type": "integer", "minimum": 0, "maximum": 1000}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "artifact_hashes", "source_urls", "reproduction_steps"],
+      "properties": {
+        "method": {
+          "enum": [
+            "REPRODUCIBLE_TEST",
+            "READ_ONLY_PROBE",
+            "VENDOR_DOCUMENTATION",
+            "COMMUNITY_REPORT",
+            "SCHEMA_CONFORMANCE_ONLY"
+          ]
+        },
+        "source_commit": {
+          "type": ["string", "null"],
+          "pattern": "^[a-fA-F0-9]{7,64}$"
+        },
+        "artifact_hashes": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"}
+        },
+        "source_urls": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^https://[^\\s]{1,500}$"}
+        },
+        "reproduction_steps": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {"type": "string", "minLength": 1, "maxLength": 600}
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reporter_class", "submitted_at_utc", "review_status"],
+      "properties": {
+        "reporter_class": {"enum": ["OWNER_TEST", "COMMUNITY", "VENDOR", "CI_SYNTHETIC"]},
+        "submitted_at_utc": {"type": "string", "format": "date-time"},
+        "review_status": {"enum": ["UNREVIEWED", "AUTOMATED_CHECKED", "HUMAN_REVIEWED"]}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "secrets_removed",
+        "personal_data_removed",
+        "private_network_data_removed",
+        "unique_device_identifiers_removed",
+        "raw_logs_excluded",
+        "user_paths_removed"
+      ],
+      "properties": {
+        "secrets_removed": {"const": true},
+        "personal_data_removed": {"const": true},
+        "private_network_data_removed": {"const": true},
+        "unique_device_identifiers_removed": {"const": true},
+        "raw_logs_excluded": {"const": true},
+        "user_paths_removed": {"const": true}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["universal_compatibility_guaranteed", "future_versions_guaranteed", "safe_to_auto_apply"],
+      "properties": {
+        "universal_compatibility_guaranteed": {"const": false},
+        "future_versions_guaranteed": {"const": false},
+        "safe_to_auto_apply": {"const": false}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+    }
+  }
+}
