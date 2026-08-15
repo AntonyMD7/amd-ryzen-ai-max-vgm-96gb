@@ -2,9 +2,10 @@
 
 Roadmap mapping:
 
-- `P-020 Verified Technical Runbook Generator` — **IN PROGRESS**
 - `P-213 Evidence-First Automation Library` — **IN PROGRESS**
 - `P-214 Recovery-First Mutation Framework` — **IN PROGRESS**
+
+`P-020` is **Configuration Best-Practice Auditor** in the canonical roadmap and is intentionally not claimed by this tranche.
 
 ## Search-before-build
 
