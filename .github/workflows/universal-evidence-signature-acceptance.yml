@@ -24,8 +24,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p signature-acceptance
-          openssl ecparam -name prime256v1 -genkey -noout -out signature-acceptance/ephemeral-private.pem
-          openssl ec -in signature-acceptance/ephemeral-private.pem -pubout -out signature-acceptance/ephemeral-public.pem
+          # Cosign v3 accepts PKCS#8 private-key PEM. OpenSSL genpkey emits
+          # PKCS#8 instead of the older SEC1 "EC PRIVATE KEY" form.
+          openssl genpkey \
+            -algorithm EC \
+            -pkeyopt ec_paramgen_curve:P-256 \
+            -out signature-acceptance/ephemeral-private.pem
+          openssl pkey \
+            -in signature-acceptance/ephemeral-private.pem \
+            -pubout \
+            -out signature-acceptance/ephemeral-public.pem
           chmod 600 signature-acceptance/ephemeral-private.pem
           cosign version
           echo 'KEY_SCOPE=DISPOSABLE_CI_FIXTURE_ONLY'
@@ -44,6 +52,7 @@ jobs:
             signature-acceptance/evidence.json \
             > signature-acceptance/signature.txt
           test -s signature-acceptance/evidence.sigstore.json
+          touch signature-acceptance/sign.ok
           echo 'SIGNED_FIXTURE_GENERATED=PASS'
           echo 'IDENTITY_ATTESTATION_CLAIMED=FALSE'
           echo 'TRANSPARENCY_LOG_INCLUSION_CLAIMED=FALSE'
@@ -57,6 +66,7 @@ jobs:
             --bundle signature-acceptance/evidence.sigstore.json \
             signature-acceptance/evidence.json \
             > signature-acceptance/verify-exact.txt
+          touch signature-acceptance/verify-exact.ok
           echo 'EXACT_BLOB_SIGNATURE_VERIFICATION=PASS'
 
       - name: Prove tampered bytes fail verification
@@ -73,6 +83,7 @@ jobs:
             echo 'Tampered blob unexpectedly verified.' >&2
             exit 1
           fi
+          touch signature-acceptance/tamper-rejected.ok
           echo 'TAMPER_REJECTION=PASS'
 
       - name: Remove private key before evidence upload
@@ -83,7 +94,7 @@ jobs:
           test ! -e signature-acceptance/ephemeral-private.pem
           echo 'PRIVATE_KEY_RETAINED=FALSE'
 
-      - name: Write claim-boundary record
+      - name: Write fail-honest claim-boundary record
         if: always()
         shell: bash
         run: |
@@ -92,15 +103,20 @@ jobs:
           from pathlib import Path
 
           out = Path('signature-acceptance')
+          exact_verified = (out / 'verify-exact.ok').exists()
+          tamper_rejected = (out / 'tamper-rejected.ok').exists()
+          signed_fixture = (out / 'sign.ok').exists()
           record = {
               'schema_version': '0.1',
               'evidence_type': 'universal-evidence-signature-supporting-acceptance',
               'tool': {'name': 'cosign', 'version_pin': 'v3.0.6'},
               'fixture': 'examples/universal-evidence-readonly-example.json',
               'verification_scope': 'DISPOSABLE_LOCAL_KEY_EXACT_BLOB_ONLY',
+              'status': 'PASS' if exact_verified and tamper_rejected else 'INCOMPLETE_OR_FAILED',
               'claims': {
-                  'exact_blob_signature_verification': True,
-                  'tamper_rejection_exercised': True,
+                  'signed_fixture_generated': signed_fixture,
+                  'exact_blob_signature_verification': exact_verified,
+                  'tamper_rejection_exercised': tamper_rejected,
                   'signer_identity_verified': False,
                   'transparency_log_inclusion_verified': False,
                   'trusted_timestamp_verified': False,
@@ -115,7 +131,19 @@ jobs:
               },
           }
           (out / 'claim-boundary.json').write_text(json.dumps(record, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          if record['status'] == 'PASS':
+              print('SIGNATURE_SUPPORTING_EVIDENCE_RECORD=PASS')
+          else:
+              print('SIGNATURE_SUPPORTING_EVIDENCE_RECORD=INCOMPLETE_OR_FAILED')
           PY
+
+      - name: Enforce final claim-boundary success
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"status": "PASS"' signature-acceptance/claim-boundary.json
+          grep -q '"signer_identity_verified": false' signature-acceptance/claim-boundary.json
+          grep -q '"statement_semantic_truth_verified": false' signature-acceptance/claim-boundary.json
 
       - name: Upload sanitized signature evidence
         if: always()
