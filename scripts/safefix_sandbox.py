@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""SafeFix v0.2 sandbox acceptance adapter.
+"""SafeFix v0.3 sandbox acceptance adapter.
 
-This module exists to prove recovery-first lifecycle mechanics without touching a
-real operating system, service, device, package manager, firmware setting, or
-network. It will only mutate regular files underneath a directory that contains
-an explicit ``.safefix-sandbox`` marker. It has no shell/command executor.
+This module proves recovery-first lifecycle mechanics without touching a real
+operating system, service, device, package manager, firmware setting, or network.
+It will only mutate regular files underneath a directory containing an explicit
+``.safefix-sandbox`` marker. It has no shell/command executor.
 
-It is a conformance/acceptance harness for F-01 SafeFix, not a production repair
-engine. Real execution adapters require separate platform-specific threat review,
-least-privilege authorization, rollback design, and live acceptance evidence.
+v0.3 adds a local transaction journal so interrupted sandbox mutations can be
+classified and recovery-snapshot corruption is detected before rollback.
+It remains an acceptance harness for F-01 SafeFix, not a production repair engine.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -24,6 +25,7 @@ from typing import Any
 
 MARKER = ".safefix-sandbox"
 RECOVERY_DIR = ".safefix-recovery"
+MANIFEST = "transaction.json"
 MAX_FILE_BYTES = 1024 * 1024
 _TX_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
@@ -107,6 +109,74 @@ def _atomic_write(path: Path, data: bytes) -> None:
             pass
 
 
+def _manifest_path(recovery_root: Path) -> Path:
+    return recovery_root / MANIFEST
+
+
+def _write_manifest(recovery_root: Path, record: dict[str, Any]) -> None:
+    payload = json.dumps(record, indent=2, sort_keys=True).encode("utf-8") + b"\n"
+    _atomic_write(_manifest_path(recovery_root), payload)
+
+
+def _read_manifest(recovery_root: Path) -> dict[str, Any]:
+    path = _manifest_path(recovery_root)
+    try:
+        record = json.loads(_read_regular_file(path).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SandboxSafeFixError("recovery transaction manifest is invalid") from exc
+    if record.get("schema_version") != "0.3":
+        raise SandboxSafeFixError("unsupported recovery transaction manifest")
+    return record
+
+
+def inspect_recovery(
+    root: str | Path,
+    relative_path: str | Path,
+    *,
+    transaction_id: str,
+) -> dict[str, Any]:
+    """Classify retained recovery state without mutating anything."""
+    sandbox = _validated_root(root)
+    tx = _validated_transaction_id(transaction_id)
+    target, rel = _validated_target(sandbox, relative_path)
+    recovery_root = sandbox / RECOVERY_DIR / tx
+    record = _read_manifest(recovery_root)
+
+    if record.get("transaction_id") != tx or record.get("target") != rel.as_posix():
+        raise SandboxSafeFixError("recovery manifest identity/target mismatch")
+
+    recovery_file = recovery_root / rel
+    recovery = _read_regular_file(recovery_file)
+    recovery_sha = _sha256(recovery)
+    if recovery_sha != record.get("recovery_sha256"):
+        raise SandboxSafeFixError("recovery snapshot digest mismatch; rollback refused")
+
+    current = _read_regular_file(target)
+    current_sha = _sha256(current)
+    if current_sha == record.get("before_sha256"):
+        observed_state = "BEFORE_STATE_PRESENT"
+    elif current_sha == record.get("desired_sha256"):
+        observed_state = "DESIRED_STATE_PRESENT"
+    else:
+        observed_state = "DIVERGED_STATE_PRESENT"
+
+    return {
+        "schema_version": "0.3",
+        "evidence_type": "safefix-sandbox-recovery-inspection",
+        "transaction_id": tx,
+        "mode": "SANDBOX_ONLY",
+        "target": rel.as_posix(),
+        "journal_phase": record.get("phase"),
+        "observed_state": observed_state,
+        "current_sha256": current_sha,
+        "before_sha256": record.get("before_sha256"),
+        "desired_sha256": record.get("desired_sha256"),
+        "recovery_sha256": recovery_sha,
+        "mutation_performed": False,
+        "production_safe_to_infer": False,
+    }
+
+
 def apply_text_change(
     root: str | Path,
     relative_path: str | Path,
@@ -116,13 +186,7 @@ def apply_text_change(
     approval_present: bool,
     expected_before_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """Apply one text-file change inside an explicitly marked sandbox.
-
-    The function snapshots the original bytes before mutation, performs an atomic
-    replacement, and hashes the post-state. Any caller-visible success record is
-    emitted only after post-write attestation. No command or external process is
-    executed.
-    """
+    """Apply one text-file change inside an explicitly marked sandbox."""
     started = _utcnow()
     sandbox = _validated_root(root)
     tx = _validated_transaction_id(transaction_id)
@@ -140,7 +204,7 @@ def apply_text_change(
 
     if desired_sha == before_sha:
         return {
-            "schema_version": "0.2",
+            "schema_version": "0.3",
             "evidence_type": "safefix-sandbox-acceptance",
             "transaction_id": tx,
             "status": "NOOP_ATTESTED",
@@ -170,6 +234,19 @@ def apply_text_change(
     if snapshot_sha != before_sha:
         raise SandboxSafeFixError("recovery snapshot attestation failed before mutation")
 
+    manifest: dict[str, Any] = {
+        "schema_version": "0.3",
+        "transaction_id": tx,
+        "target": rel.as_posix(),
+        "phase": "PREPARED",
+        "prepared_at_utc": _utcnow(),
+        "before_sha256": before_sha,
+        "desired_sha256": desired_sha,
+        "recovery_sha256": snapshot_sha,
+        "production_safe_to_infer": False,
+    }
+    _write_manifest(recovery_root, manifest)
+
     _atomic_write(target, desired)
     after = _read_regular_file(target)
     after_sha = _sha256(after)
@@ -181,8 +258,11 @@ def apply_text_change(
             f"restored={restored_sha == before_sha}"
         )
 
+    manifest.update({"phase": "COMMITTED", "committed_at_utc": _utcnow(), "after_sha256": after_sha})
+    _write_manifest(recovery_root, manifest)
+
     return {
-        "schema_version": "0.2",
+        "schema_version": "0.3",
         "evidence_type": "safefix-sandbox-acceptance",
         "transaction_id": tx,
         "status": "MUTATION_ATTESTED",
@@ -194,6 +274,7 @@ def apply_text_change(
         "desired_sha256": desired_sha,
         "recovery_sha256": snapshot_sha,
         "after_sha256": after_sha,
+        "journal_phase": "COMMITTED",
         "mutation_performed": True,
         "approval_present": True,
         "recovery_snapshot_created": True,
@@ -209,14 +290,21 @@ def rollback(
     *,
     transaction_id: str,
 ) -> dict[str, Any]:
-    """Restore a target from the transaction's attested sandbox snapshot."""
+    """Restore a target from its integrity-checked sandbox snapshot."""
     started = _utcnow()
     sandbox = _validated_root(root)
     tx = _validated_transaction_id(transaction_id)
     target, rel = _validated_target(sandbox, relative_path)
-    recovery_file = sandbox / RECOVERY_DIR / tx / rel
+    recovery_root = sandbox / RECOVERY_DIR / tx
+    manifest = _read_manifest(recovery_root)
+    if manifest.get("transaction_id") != tx or manifest.get("target") != rel.as_posix():
+        raise SandboxSafeFixError("recovery manifest identity/target mismatch")
+
+    recovery_file = recovery_root / rel
     recovery = _read_regular_file(recovery_file)
     recovery_sha = _sha256(recovery)
+    if recovery_sha != manifest.get("recovery_sha256") or recovery_sha != manifest.get("before_sha256"):
+        raise SandboxSafeFixError("recovery snapshot digest mismatch; rollback refused")
 
     current = _read_regular_file(target)
     current_sha = _sha256(current)
@@ -225,8 +313,16 @@ def rollback(
     if restored_sha != recovery_sha:
         raise SandboxSafeFixError("rollback attestation failed")
 
+    manifest.update({
+        "phase": "ROLLED_BACK",
+        "rolled_back_at_utc": _utcnow(),
+        "pre_rollback_sha256": current_sha,
+        "restored_sha256": restored_sha,
+    })
+    _write_manifest(recovery_root, manifest)
+
     return {
-        "schema_version": "0.2",
+        "schema_version": "0.3",
         "evidence_type": "safefix-sandbox-rollback",
         "transaction_id": tx,
         "status": "ROLLBACK_ATTESTED",
@@ -237,6 +333,7 @@ def rollback(
         "pre_rollback_sha256": current_sha,
         "recovery_sha256": recovery_sha,
         "restored_sha256": restored_sha,
+        "journal_phase": "ROLLED_BACK",
         "rollback_performed": True,
         "post_rollback_attested": True,
         "production_safe_to_infer": False,
