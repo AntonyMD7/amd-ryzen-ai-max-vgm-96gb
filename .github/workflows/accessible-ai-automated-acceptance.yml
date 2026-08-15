@@ -1,0 +1,182 @@
+name: Accessible AI automated supporting acceptance
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  axe-supporting-evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install pinned validation and accessibility tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'jsonschema==4.26.0'
+          npm install --global '@axe-core/cli@4.11.3'
+          axe --version
+          google-chrome --version
+          "$CHROMEWEBDRIVER/chromedriver" --version
+
+      - name: Generate exact sanitized report artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p accessibility-acceptance/site accessibility-acceptance/evidence
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import sys
+
+          sys.path.insert(0, 'scripts')
+          from accessible_report import render_html
+          from system_doctor import collect
+
+          out = Path('accessibility-acceptance/site')
+          report = collect()
+          assert report['collector']['mode'] == 'READ_ONLY'
+          assert all(value is False for value in report['privacy'].values())
+          assert all(value is False for value in report['mutation'].values())
+          (out / 'en.html').write_text(render_html(report, 'en'), encoding='utf-8')
+          (out / 'es.html').write_text(render_html(report, 'es'), encoding='utf-8')
+          (out / 'report.json').write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print('ACCESSIBLE_REPORT_GENERATION=PASS')
+          PY
+
+      - name: Serve reports on loopback only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 8765 --bind 127.0.0.1 --directory accessibility-acceptance/site >/tmp/accessible-ai-http.log 2>&1 &
+          echo $! > /tmp/accessible-ai-http.pid
+          for i in {1..20}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8765/en.html >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat /tmp/accessible-ai-http.log >&2 || true
+          exit 1
+
+      - name: Run pinned axe CLI against English and Spanish artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          # axe CLI defaults to headless Chrome. Omitting --browser keeps custom
+          # Chrome options valid while the exact hosted driver is supplied.
+          AXE_COMMON=(--chromedriver-path="$CHROMEWEBDRIVER/chromedriver" --chrome-options="no-sandbox,disable-setuid-sandbox,disable-dev-shm-usage" --tags wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa --exit --stdout)
+          axe "${AXE_COMMON[@]}" http://127.0.0.1:8765/en.html > accessibility-acceptance/evidence/axe-en.json
+          axe "${AXE_COMMON[@]}" http://127.0.0.1:8765/es.html > accessibility-acceptance/evidence/axe-es.json
+          echo 'AXE_AUTOMATED_SUPPORTING_CHECKS=PASS'
+          echo 'WCAG_CONFORMANCE_CLAIMED=FALSE'
+
+      - name: Build and validate fail-honest evidence records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          import subprocess
+
+          root = Path('accessibility-acceptance')
+          tool_version = subprocess.check_output(['axe', '--version'], text=True).strip()
+
+          for lang in ('en', 'es'):
+              html_path = root / 'site' / f'{lang}.html'
+              html_bytes = html_path.read_bytes()
+              axe_path = root / 'evidence' / f'axe-{lang}.json'
+              axe_data = json.loads(axe_path.read_text(encoding='utf-8'))
+              if not isinstance(axe_data, list) or not axe_data:
+                  raise SystemExit(f'axe result for {lang} has unexpected shape')
+              violations = sum(len(item.get('violations', [])) for item in axe_data)
+              if violations:
+                  raise SystemExit(f'axe violations unexpectedly survived --exit for {lang}: {violations}')
+
+              evidence = {
+                  'schema_version': '0.1',
+                  'evidence_type': 'accessible-ai-supporting-acceptance',
+                  'evidence_class': 'AUTOMATED_TOOL',
+                  'subject': {
+                      'artifact_kind': 'HTML',
+                      'artifact_ref': f'accessibility-acceptance/site/{lang}.html',
+                      'sha256': hashlib.sha256(html_bytes).hexdigest(),
+                  },
+                  'standard_target': 'WCAG_2_2_AA',
+                  'environment': {
+                      'os_family': 'GitHub-hosted Ubuntu 24.04',
+                      'browser_family': 'Google Chrome headless',
+                      'assistive_technology': 'not run',
+                      'tool_name': '@axe-core/cli',
+                      'tool_version': tool_version,
+                  },
+                  'checks': {
+                      'keyboard_only': {'status': 'NOT_RUN', 'evidence_ref': '', 'notes': 'Automated axe run cannot establish keyboard-only usability.'},
+                      'screen_reader': {'status': 'NOT_RUN', 'evidence_ref': '', 'notes': 'No screen reader was run.'},
+                      'zoom_reflow_400': {'status': 'NOT_RUN', 'evidence_ref': '', 'notes': 'No manual 400 percent zoom/reflow session was run.'},
+                      'reduced_motion': {'status': 'NOT_RUN', 'evidence_ref': '', 'notes': 'Static CSS contract exists; user-preference behavior was not manually accepted here.'},
+                      'language_semantics': {'status': 'PASS', 'evidence_ref': f'accessibility-acceptance/evidence/axe-{lang}.json', 'notes': 'Exact generated artifact passed the selected automated axe WCAG-tag rules, including document-language rules when applicable.'},
+                      'automated_rules': {'status': 'PASS', 'evidence_ref': f'accessibility-acceptance/evidence/axe-{lang}.json', 'notes': 'Pinned axe CLI completed with --exit and no violations for the selected rule tags.'},
+                  },
+                  'privacy': {
+                      'participant_identity_stored': False,
+                      'participant_contact_stored': False,
+                      'credential_values_stored': False,
+                      'private_content_stored': False,
+                      'consent_recorded_when_people_involved': False,
+                  },
+                  'claims': {
+                      'wcag_conformance': False,
+                      'all_accessibility_issues_found': False,
+                      'real_user_acceptance': False,
+                      'production_ready': False,
+                  },
+              }
+              evidence_path = root / 'evidence' / f'accessible-ai-{lang}.json'
+              evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+          print('SUPPORTING_EVIDENCE_RECORDS=BUILT')
+          PY
+
+          for f in accessibility-acceptance/evidence/accessible-ai-en.json accessibility-acceptance/evidence/accessible-ai-es.json; do
+            python scripts/accessibility_acceptance_validate.py "$f" > "$f.validation.json"
+            grep -q 'AUTOMATED_SUPPORTING_EVIDENCE_NOT_CONFORMANCE' "$f.validation.json"
+            grep -q '"wcag_conformance_certified_by_validator": false' "$f.validation.json"
+          done
+          echo 'ACCESSIBLE_AI_EVIDENCE_VALIDATION=PASS'
+          echo 'REAL_USER_ACCEPTANCE_CLAIMED=FALSE'
+          echo 'PRODUCTION_READY_CLAIMED=FALSE'
+
+      - name: Stop loopback server
+        if: always()
+        shell: bash
+        run: |
+          if test -f /tmp/accessible-ai-http.pid; then
+            kill "$(cat /tmp/accessible-ai-http.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload sanitized supporting evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessible-ai-automated-supporting-evidence
+          path: accessibility-acceptance/
+          if-no-files-found: error
+          retention-days: 14
