@@ -1,0 +1,60 @@
+{
+  "schema_version": "0.1",
+  "evidence_id": "vgm-readonly-example-001",
+  "evidence_type": "discovery",
+  "roadmap_ids": ["F-01", "F-05", "P-211", "P-212"],
+  "subject": {
+    "type": "configuration",
+    "id": "amd-vgm-example",
+    "version": null
+  },
+  "operation": {
+    "classification": "READ_ONLY",
+    "name": "enumerate-supported-vgm-options",
+    "intended_change": null,
+    "authorization_ref": null,
+    "tool": "vgm_readonly_probe.py",
+    "tool_version": "reference"
+  },
+  "observed_at_utc": "2026-08-14T12:57:20Z",
+  "pre_state": {
+    "note": "Example only; no machine identity or private infrastructure data retained."
+  },
+  "result": {
+    "status": "PASS",
+    "exit_code": 0,
+    "summary": "Read-only discovery completed in the example evidence envelope."
+  },
+  "post_state": null,
+  "artifacts": [],
+  "rollback": {
+    "required": false,
+    "established": false,
+    "reference": null,
+    "exercised": null
+  },
+  "acceptance": [
+    {
+      "id": "readonly-no-mutation",
+      "status": "PASS",
+      "evidence_ref": "scripts/vgm_readonly_probe.py"
+    }
+  ],
+  "safety": {
+    "secrets_redacted": true,
+    "private_infrastructure_redacted": true,
+    "human_approval_required": false,
+    "approval_present": false
+  },
+  "provenance": {
+    "producer": "public-reference-example",
+    "source_commit": "df8db3e6aef9f97636cc655c1dffce97578fe568",
+    "upstream_refs": [
+      "https://github.com/in-toto/attestation"
+    ]
+  },
+  "limitations": [
+    "This record demonstrates the envelope only and is not fresh hardware attestation.",
+    "The universal evidence schema is a project draft, not an external standard."
+  ]
+}
