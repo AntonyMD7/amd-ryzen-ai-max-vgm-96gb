@@ -34,7 +34,10 @@ def test_ollama_linux_plan_is_non_executing_and_uses_official_authority():
     record = planner.build_plan("ollama", signals("linux"))
     assert_plan_only(record)
     assert record["authority"]["linux"].startswith("https://docs.ollama.com/")
-    assert any("verify" in step.lower() for step in record["plan"]["verification"])
+    verification = record["plan"]["verification"]
+    assert verification
+    assert all(isinstance(step, str) and step.strip() for step in verification)
+    assert any("confirm" in step.lower() for step in verification)
 
 
 def test_ollama_windows_and_macos_have_platform_specific_paths():
