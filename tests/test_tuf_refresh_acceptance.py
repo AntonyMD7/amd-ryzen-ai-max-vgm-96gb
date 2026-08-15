@@ -10,7 +10,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from tuf_refresh_acceptance import TufRefreshAcceptanceError, git_blob_sha1, validate_bootstrap
+from tuf_refresh_acceptance import (
+    TRUSTED_ROOT_MEDIA_TYPE,
+    TufRefreshAcceptanceError,
+    git_blob_sha1,
+    validate_bootstrap,
+)
 
 
 def root_bytes(version: int = 5) -> bytes:
@@ -80,3 +85,10 @@ def test_bootstrap_validation_rejects_non_root_json():
             expected_git_blob_sha1=expected_git_blob(data),
             expected_root_version=5,
         )
+
+
+def test_canonical_sigstore_trusted_root_media_type_is_accepted():
+    assert TRUSTED_ROOT_MEDIA_TYPE.fullmatch(
+        "application/vnd.dev.sigstore.trustedroot+json;version=0.1"
+    )
+    assert not TRUSTED_ROOT_MEDIA_TYPE.fullmatch("application/json")
