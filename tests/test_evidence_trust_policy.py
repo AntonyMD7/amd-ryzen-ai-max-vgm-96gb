@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -21,6 +22,12 @@ def profile():
 
 def observation():
     return load("evidence-trust-observation-synthetic-v0.1.json")
+
+
+def test_synthetic_profile_validates_against_schema():
+    schema = json.loads((ROOT / "schemas/evidence-trust-profile-v0.1.schema.json").read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(profile())
 
 
 def test_matching_policy_satisfies_only_cryptographic_policy():
