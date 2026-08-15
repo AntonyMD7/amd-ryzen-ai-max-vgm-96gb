@@ -58,12 +58,16 @@ jobs:
             docs/COMPATIBILITY.md \
             docs/PUBLIC-BUILD-FOUNDATIONS.md \
             docs/SYSTEM-DOCTOR-AND-ACCESSIBLE-AI.md \
+            docs/BEGINNER-TECH-RESCUE.md \
             SECURITY.md \
             CONTRIBUTING.md \
             scripts/safefix_contract.py \
             scripts/local_ai_readiness.py \
             scripts/system_doctor.py \
             scripts/accessible_report.py \
+            scripts/safe_command_explainer.py \
+            scripts/error_message_explainer.py \
+            scripts/beginner_tech_rescue.py \
             schemas/universal-evidence-v0.1.schema.json \
             schemas/hardware-compatibility-report-v0.1.schema.json \
             examples/universal-evidence-readonly-example.json; do
