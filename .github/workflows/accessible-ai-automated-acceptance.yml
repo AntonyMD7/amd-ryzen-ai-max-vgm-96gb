@@ -78,7 +78,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          AXE_COMMON=(--browser chrome --chromedriver-path="$CHROMEWEBDRIVER/chromedriver" --chrome-options="no-sandbox,disable-setuid-sandbox,disable-dev-shm-usage" --tags wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa --exit --stdout)
+          # axe CLI defaults to headless Chrome. Omitting --browser keeps custom
+          # Chrome options valid while the exact hosted driver is supplied.
+          AXE_COMMON=(--chromedriver-path="$CHROMEWEBDRIVER/chromedriver" --chrome-options="no-sandbox,disable-setuid-sandbox,disable-dev-shm-usage" --tags wcag2a,wcag2aa,wcag21a,wcag21aa,wcag22aa --exit --stdout)
           axe "${AXE_COMMON[@]}" http://127.0.0.1:8765/en.html > accessibility-acceptance/evidence/axe-en.json
           axe "${AXE_COMMON[@]}" http://127.0.0.1:8765/es.html > accessibility-acceptance/evidence/axe-es.json
           echo 'AXE_AUTOMATED_SUPPORTING_CHECKS=PASS'
