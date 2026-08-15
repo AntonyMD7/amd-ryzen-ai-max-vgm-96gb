@@ -19,28 +19,32 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check 'jsonschema>=4.23,<5' 'pytest>=8,<9'
+
       - name: Compile Python sources
-        run: python -m compileall -q scripts
+        run: python -m compileall -q scripts tests
+
+      - name: Validate SafeFix, evidence, Local AI, and compatibility contracts
+        run: python -m pytest -q tests/test_public_build_foundations.py
 
       - name: Enforce read-only probe contract
-        shell: bash
         run: |
-          set -euo pipefail
-          file='scripts/vgm_readonly_probe.py'
-          test -f "$file"
-          grep -q 'SETOPTION_BOUND=FALSE' "$file"
-          grep -q 'SETOPTION_CALLED=FALSE' "$file"
-          grep -q 'VGM_CHANGED=FALSE' "$file"
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/vgm_readonly_probe.py')
+          text = p.read_text(encoding='utf-8')
+          for required in ('SETOPTION_BOUND=FALSE', 'SETOPTION_CALLED=FALSE', 'VGM_CHANGED=FALSE'):
+              if required not in text:
+                  raise SystemExit(f'missing read-only marker: {required}')
+          forbidden = ('dll.SetOption', '.SetOption(', 'getattr(dll, "SetOption"', "getattr(dll, 'SetOption'")
+          hits = [token for token in forbidden if token in text]
+          if hits:
+              raise SystemExit(f'read-only safety contract violated: {hits}')
+          print('READ_ONLY_CONTRACT=PASS')
+          PY
 
-          # Block obvious code forms that would bind/call the mutating API in
-          # the file explicitly presented to users as read-only. Documentation
-          # strings may mention SetOption, so this is intentionally narrow.
-          if grep -En 'dll\.SetOption|\.SetOption\(|getattr\([^)]*["'"']SetOption|bind\([^\n]*,[[:space:]]*7[[:space:]]*,' "$file"; then
-            echo 'Read-only safety contract violated.' >&2
-            exit 1
-          fi
-
-      - name: Verify required safety documentation
+      - name: Verify required safety documentation and foundation artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -52,8 +56,14 @@ jobs:
             docs/TROUBLESHOOTING.md \
             docs/COMMUNITY-SAFETY.md \
             docs/COMPATIBILITY.md \
+            docs/PUBLIC-BUILD-FOUNDATIONS.md \
             SECURITY.md \
-            CONTRIBUTING.md; do
+            CONTRIBUTING.md \
+            scripts/safefix_contract.py \
+            scripts/local_ai_readiness.py \
+            schemas/universal-evidence-v0.1.schema.json \
+            schemas/hardware-compatibility-report-v0.1.schema.json \
+            examples/universal-evidence-readonly-example.json; do
               test -s "$f" || { echo "Missing required file: $f" >&2; exit 1; }
           done
 
