@@ -1,0 +1,64 @@
+{
+  "schema_version": "0.2",
+  "report_id": "HCC-SYNTHETIC-0001",
+  "hardware": {
+    "vendor": "Example Vendor",
+    "model": "Synthetic Reference System",
+    "architecture": "x86_64",
+    "memory_gib": 16,
+    "accelerator": "Synthetic Accelerator",
+    "device_class": "SYSTEM"
+  },
+  "software": {
+    "os": "ExampleOS",
+    "os_version": "1.0",
+    "kernel": null,
+    "driver": null,
+    "runtime": null,
+    "firmware": null
+  },
+  "configuration": [
+    {
+      "key": "example.feature_mode",
+      "value": "disabled"
+    }
+  ],
+  "observation": {
+    "status": "SYNTHETIC_CONFORMANCE_ONLY",
+    "observed_at_utc": "2026-08-15T00:00:00Z",
+    "summary": "Synthetic record used only to exercise the public intake contract; no hardware compatibility is claimed.",
+    "reproduction_runs": 0
+  },
+  "evidence": {
+    "method": "SCHEMA_CONFORMANCE_ONLY",
+    "source_commit": null,
+    "artifact_hashes": [],
+    "source_urls": [
+      "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb"
+    ],
+    "reproduction_steps": [
+      "Validate this synthetic fixture against the v0.2 schema and intake validator."
+    ]
+  },
+  "provenance": {
+    "reporter_class": "CI_SYNTHETIC",
+    "submitted_at_utc": "2026-08-15T00:00:00Z",
+    "review_status": "AUTOMATED_CHECKED"
+  },
+  "privacy": {
+    "secrets_removed": true,
+    "personal_data_removed": true,
+    "private_network_data_removed": true,
+    "unique_device_identifiers_removed": true,
+    "raw_logs_excluded": true,
+    "user_paths_removed": true
+  },
+  "claims": {
+    "universal_compatibility_guaranteed": false,
+    "future_versions_guaranteed": false,
+    "safe_to_auto_apply": false
+  },
+  "limitations": [
+    "This is synthetic schema-conformance data, not evidence from a real device."
+  ]
+}
