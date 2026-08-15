@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/schemas/automation-plan-v0.1.schema.json",
+  "title": "Evidence-First Automation Plan v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "title", "roadmap_ids", "mode", "scope", "steps", "acceptance", "evidence", "rollback", "approval", "limitations"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "plan_id": {"type": "string", "minLength": 8},
+    "title": {"type": "string", "minLength": 1},
+    "roadmap_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^(F-[0-9]{2}|P-[0-9]{3})$"}
+    },
+    "mode": {"type": "string", "enum": ["READ_ONLY", "MUTATING"]},
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "environment"],
+      "properties": {
+        "subject": {"type": "string", "minLength": 1},
+        "environment": {"type": "string", "enum": ["LOCAL", "TEST", "STAGING", "PRODUCTION", "OTHER"]},
+        "explicit_exclusions": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "phase", "description", "classification", "command_ref", "expected_evidence"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "phase": {"type": "string", "enum": ["DISCOVER", "VERIFY", "PREFLIGHT", "APPROVE", "MUTATE", "RESTART", "ATTEST", "PUBLISH_EVIDENCE"]},
+          "description": {"type": "string", "minLength": 1},
+          "classification": {"type": "string", "enum": ["READ_ONLY", "MUTATING", "HUMAN_GATE"]},
+          "command_ref": {"type": ["string", "null"]},
+          "expected_evidence": {"type": "array", "items": {"type": "string"}},
+          "timeout_seconds": {"type": ["integer", "null"], "minimum": 1},
+          "idempotency": {"type": ["string", "null"], "enum": ["IDEMPOTENT", "NOT_IDEMPOTENT", "UNKNOWN", null]}
+        }
+      }
+    },
+    "acceptance": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "description", "required"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1},
+          "required": {"type": "boolean"}
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_ref", "retention", "secret_values_allowed"],
+      "properties": {
+        "schema_ref": {"type": "string", "minLength": 1},
+        "retention": {"type": "string", "enum": ["EPHEMERAL", "LOCAL", "CANONICAL"]},
+        "secret_values_allowed": {"const": false}
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "established", "procedure_ref", "prechange_backup_ref"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "established": {"type": "boolean"},
+        "procedure_ref": {"type": ["string", "null"]},
+        "prechange_backup_ref": {"type": ["string", "null"]}
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "present", "authorization_ref"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "present": {"type": "boolean"},
+        "authorization_ref": {"type": ["string", "null"]}
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "MUTATING"}}, "required": ["mode"]},
+      "then": {
+        "properties": {
+          "rollback": {
+            "properties": {
+              "required": {"const": true},
+              "established": {"const": true},
+              "procedure_ref": {"type": "string", "minLength": 1}
+            }
+          },
+          "approval": {
+            "properties": {
+              "required": {"const": true},
+              "present": {"const": true},
+              "authorization_ref": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

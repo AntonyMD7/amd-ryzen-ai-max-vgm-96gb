@@ -1,0 +1,90 @@
+{
+  "schema_version": "0.1",
+  "plan_id": "readonly-system-health-001",
+  "title": "Read-Only System Health Evidence Runbook",
+  "roadmap_ids": ["P-213"],
+  "mode": "READ_ONLY",
+  "scope": {
+    "subject": "example-local-system",
+    "environment": "LOCAL",
+    "explicit_exclusions": [
+      "No repair",
+      "No service restart",
+      "No credential or environment-value collection"
+    ]
+  },
+  "steps": [
+    {
+      "id": "discover-health",
+      "phase": "DISCOVER",
+      "description": "Collect the shallow privacy-safe System Doctor record.",
+      "classification": "READ_ONLY",
+      "command_ref": "python scripts/system_doctor.py --audience engineer",
+      "expected_evidence": ["structured System Doctor JSON record"],
+      "timeout_seconds": 10,
+      "idempotency": "IDEMPOTENT"
+    },
+    {
+      "id": "verify-boundary",
+      "phase": "VERIFY",
+      "description": "Verify the record declares no mutation and no sensitive collection.",
+      "classification": "READ_ONLY",
+      "command_ref": "tests/test_system_doctor_accessibility.py",
+      "expected_evidence": ["privacy flags false", "mutation flags false"],
+      "timeout_seconds": 30,
+      "idempotency": "IDEMPOTENT"
+    },
+    {
+      "id": "attest-result",
+      "phase": "ATTEST",
+      "description": "Validate required evidence fields before publication.",
+      "classification": "READ_ONLY",
+      "command_ref": "schemas/universal-evidence-v0.1.schema.json",
+      "expected_evidence": ["schema validation PASS"],
+      "timeout_seconds": 30,
+      "idempotency": "IDEMPOTENT"
+    },
+    {
+      "id": "publish-sanitized",
+      "phase": "PUBLISH_EVIDENCE",
+      "description": "Publish only the sanitized evidence reference after validation.",
+      "classification": "READ_ONLY",
+      "command_ref": null,
+      "expected_evidence": ["sanitized evidence reference"],
+      "timeout_seconds": null,
+      "idempotency": "IDEMPOTENT"
+    }
+  ],
+  "acceptance": [
+    {
+      "id": "no-mutation",
+      "description": "The resulting record states that no system mutation occurred.",
+      "required": true
+    },
+    {
+      "id": "no-secrets",
+      "description": "No secret values are present in retained evidence.",
+      "required": true
+    }
+  ],
+  "evidence": {
+    "schema_ref": "schemas/universal-evidence-v0.1.schema.json",
+    "retention": "CANONICAL",
+    "secret_values_allowed": false
+  },
+  "rollback": {
+    "required": false,
+    "established": false,
+    "procedure_ref": null,
+    "prechange_backup_ref": null
+  },
+  "approval": {
+    "required": false,
+    "present": false,
+    "authorization_ref": null
+  },
+  "limitations": [
+    "This example demonstrates planning and evidence structure only.",
+    "A validated runbook is not evidence that its steps were executed."
+  ]
+}
