@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/schemas/universal-evidence-integrity-v0.2.schema.json",
+  "title": "DAIS Universal Evidence integrity sidecar v0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sidecar_type",
+    "evidence_id",
+    "evidence_schema_version",
+    "hashes",
+    "normalization",
+    "artifact_bindings",
+    "checks",
+    "trust",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.2"},
+    "sidecar_type": {"const": "dais-universal-evidence-integrity"},
+    "evidence_id": {"type": "string", "minLength": 8},
+    "evidence_schema_version": {"const": "0.1"},
+    "hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact_bytes_sha256", "dais_sorted_json_v0_1_sha256"],
+      "properties": {
+        "exact_bytes_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "dais_sorted_json_v0_1_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "rfc8785_jcs_conformance_claimed", "signature_format"],
+      "properties": {
+        "profile": {"const": "DAIS_SORTED_JSON_V0.1"},
+        "rfc8785_jcs_conformance_claimed": {"const": false},
+        "signature_format": {"const": false}
+      }
+    },
+    "artifact_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "declared_sha256", "verified_from_root"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "declared_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "verified_from_root": {"type": ["boolean", "null"]},
+          "observed_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_validation", "semantic_consistency", "privacy_prefilter"],
+      "properties": {
+        "schema_validation": {"const": "PASS"},
+        "semantic_consistency": {"const": "PASS"},
+        "privacy_prefilter": {"const": "PASS"}
+      }
+    },
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signature_present",
+        "signature_verified",
+        "producer_identity_verified",
+        "trusted_timestamp_verified",
+        "authorization_truth_verified",
+        "provenance_truth_verified",
+        "evidence_truth_verified"
+      ],
+      "properties": {
+        "signature_present": {"const": false},
+        "signature_verified": {"const": false},
+        "producer_identity_verified": {"const": false},
+        "trusted_timestamp_verified": {"const": false},
+        "authorization_truth_verified": {"const": false},
+        "provenance_truth_verified": {"const": false},
+        "evidence_truth_verified": {"const": false}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
