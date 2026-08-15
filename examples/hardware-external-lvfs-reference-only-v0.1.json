@@ -1,0 +1,35 @@
+{
+  "schema_version": "0.1",
+  "source": {
+    "source_class": "LVFS_PUBLIC_METADATA_REFERENCE",
+    "dataset_url": "https://fwupd.org/",
+    "snapshot_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "snapshot_ref": "lvfs-public-reference-v0.1",
+    "license_expression": "UNRESOLVED_REFERENCE_ONLY",
+    "rights_status": "REFERENCE_ONLY",
+    "privacy_status": "NOT_REVIEWED",
+    "reviewed_at_utc": "2026-08-15T09:00:00Z"
+  },
+  "hardware": {
+    "vendor": "Synthetic Vendor",
+    "model": "Synthetic Firmware Device",
+    "architecture": "x86_64",
+    "accelerator": null,
+    "device_class": "FIRMWARE_DEVICE"
+  },
+  "software": {
+    "os": "Linux",
+    "os_version": "Synthetic Distribution 1",
+    "kernel": null,
+    "driver": null,
+    "runtime": "fwupd synthetic",
+    "firmware": "synthetic-version"
+  },
+  "configuration": [],
+  "observation": {
+    "source_status": "VENDOR_DOCUMENTED",
+    "observed_at_utc": "2026-08-01T12:00:00Z",
+    "summary_key": "EXTERNAL_FIRMWARE_METADATA_REFERENCE",
+    "aggregate_count": 1
+  }
+}

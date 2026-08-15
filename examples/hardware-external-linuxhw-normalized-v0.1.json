@@ -1,0 +1,40 @@
+{
+  "schema_version": "0.1",
+  "source": {
+    "source_class": "LINUXHW_HWINFO_CC_BY_4_0",
+    "dataset_url": "https://github.com/linuxhw/HWInfo",
+    "snapshot_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "snapshot_ref": "abcdef1234567890",
+    "license_expression": "CC-BY-4.0",
+    "rights_status": "DERIVED_FACTS_PUBLICATION_REVIEWED",
+    "privacy_status": "NORMALIZED_IDENTIFIERS_REMOVED",
+    "reviewed_at_utc": "2026-08-15T09:00:00Z"
+  },
+  "hardware": {
+    "vendor": "Synthetic Vendor",
+    "model": "Synthetic Workstation Model",
+    "architecture": "x86_64",
+    "accelerator": "Synthetic GPU Family",
+    "device_class": "GPU"
+  },
+  "software": {
+    "os": "Linux",
+    "os_version": "Synthetic Distribution 1",
+    "kernel": "6.x-synthetic",
+    "driver": "synthetic-driver-1",
+    "runtime": null,
+    "firmware": null
+  },
+  "configuration": [
+    {
+      "key": "display.server",
+      "value": "wayland"
+    }
+  ],
+  "observation": {
+    "source_status": "COMMUNITY_WORKING",
+    "observed_at_utc": "2026-08-01T12:00:00Z",
+    "summary_key": "EXTERNAL_COMMUNITY_OPERATION_OBSERVED",
+    "aggregate_count": 3
+  }
+}

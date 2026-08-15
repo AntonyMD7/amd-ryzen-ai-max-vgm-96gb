@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/schemas/hardware-external-observation-v0.1.schema.json",
+  "title": "Hardware Compatibility Commons governed external observation v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source", "hardware", "software", "configuration", "observation"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_class", "dataset_url", "snapshot_sha256", "snapshot_ref", "license_expression", "rights_status", "privacy_status", "reviewed_at_utc"],
+      "properties": {
+        "source_class": {"enum": ["LINUXHW_HWINFO_CC_BY_4_0", "LVFS_PUBLIC_METADATA_REFERENCE"]},
+        "dataset_url": {"type": "string", "pattern": "^https://[^\\s]{1,500}$"},
+        "snapshot_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "snapshot_ref": {"type": "string", "pattern": "^[A-Za-z0-9._/-]{1,120}$"},
+        "license_expression": {"enum": ["CC-BY-4.0", "UNRESOLVED_REFERENCE_ONLY"]},
+        "rights_status": {"enum": ["DERIVED_FACTS_PUBLICATION_REVIEWED", "REFERENCE_ONLY"]},
+        "privacy_status": {"enum": ["NORMALIZED_IDENTIFIERS_REMOVED", "NOT_REVIEWED"]},
+        "reviewed_at_utc": {"type": "string", "format": "date-time"}
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vendor", "model", "architecture", "accelerator", "device_class"],
+      "properties": {
+        "vendor": {"type": "string", "minLength": 1, "maxLength": 120},
+        "model": {"type": "string", "minLength": 1, "maxLength": 180},
+        "architecture": {"type": "string", "minLength": 1, "maxLength": 80},
+        "accelerator": {"type": ["string", "null"], "maxLength": 180},
+        "device_class": {"enum": ["SYSTEM", "CPU", "GPU", "NPU", "STORAGE", "NETWORK", "PERIPHERAL", "FIRMWARE_DEVICE", "OTHER"]}
+      }
+    },
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "os_version", "kernel", "driver", "runtime", "firmware"],
+      "properties": {
+        "os": {"type": "string", "minLength": 1, "maxLength": 80},
+        "os_version": {"type": "string", "minLength": 1, "maxLength": 160},
+        "kernel": {"type": ["string", "null"], "maxLength": 180},
+        "driver": {"type": ["string", "null"], "maxLength": 240},
+        "runtime": {"type": ["string", "null"], "maxLength": 240},
+        "firmware": {"type": ["string", "null"], "maxLength": 240}
+      }
+    },
+    "configuration": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "value"],
+        "properties": {
+          "key": {"type": "string", "pattern": "^[A-Za-z0-9_.:/-]{1,80}$"},
+          "value": {"type": "string", "minLength": 1, "maxLength": 300}
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_status", "observed_at_utc", "summary_key", "aggregate_count"],
+      "properties": {
+        "source_status": {"enum": ["COMMUNITY_WORKING", "COMMUNITY_FAILING", "COMMUNITY_PARTIAL", "VENDOR_DOCUMENTED", "UNKNOWN"]},
+        "observed_at_utc": {"type": "string", "format": "date-time"},
+        "summary_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,95}$"},
+        "aggregate_count": {"type": "integer", "minimum": 1, "maximum": 1000000000}
+      }
+    }
+  }
+}

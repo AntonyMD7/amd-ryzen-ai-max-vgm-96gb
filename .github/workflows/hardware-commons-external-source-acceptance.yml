@@ -1,0 +1,123 @@
+name: Hardware Commons external source acceptance
+
+on:
+  push:
+    paths:
+      - 'scripts/hardware_external_observation_adapter.py'
+      - 'schemas/hardware-external-observation-v0.1.schema.json'
+      - 'tests/test_hardware_external_observation_adapter.py'
+      - 'examples/hardware-external-linuxhw-normalized-v0.1.json'
+      - 'examples/hardware-external-lvfs-reference-only-v0.1.json'
+      - 'docs/HARDWARE-COMPATIBILITY-COMMONS-EXTERNAL-SOURCES.md'
+      - '.github/workflows/hardware-commons-external-source-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  external-source-governance:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bounded validation dependencies
+        run: python -m pip install --disable-pip-version-check 'jsonschema>=4.23,<5' 'pytest>=8,<9'
+
+      - name: Run external-source governance tests
+        run: python -m pytest -q tests/test_hardware_external_observation_adapter.py
+
+      - name: Adapt reviewed synthetic LinuxHW derived fact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p hcc-external-acceptance
+          python scripts/hardware_external_observation_adapter.py \
+            examples/hardware-external-linuxhw-normalized-v0.1.json \
+            --output hcc-external-acceptance/linuxhw-candidate.json \
+            > hcc-external-acceptance/linuxhw-adapter-result.json
+          python scripts/hardware_compatibility_intake.py \
+            hcc-external-acceptance/linuxhw-candidate.json \
+            > hcc-external-acceptance/linuxhw-intake-result.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('hcc-external-acceptance')
+          report=json.loads((root/'linuxhw-candidate.json').read_text(encoding='utf-8'))
+          adapter=json.loads((root/'linuxhw-adapter-result.json').read_text(encoding='utf-8'))
+          intake=json.loads((root/'linuxhw-intake-result.json').read_text(encoding='utf-8'))
+          assert adapter['status'] == 'ELIGIBLE_EXTERNAL_DERIVED_FACT_FOR_PUBLIC_REVIEW_NOT_VERIFIED'
+          assert adapter['compatibility_verified'] is False
+          assert adapter['safe_to_auto_apply'] is False
+          assert adapter['roadmap_complete'] is False
+          assert report['observation']['status'] == 'COMMUNITY_REPORTED'
+          assert report['observation']['reproduction_runs'] == 0
+          assert report['evidence']['method'] == 'COMMUNITY_REPORT'
+          assert all(value is False for value in report['claims'].values())
+          assert all(value is True for value in report['privacy'].values())
+          assert intake['status'] == 'ELIGIBLE_FOR_PUBLIC_REVIEW_NOT_VERIFIED'
+          assert intake['compatibility_verified_by_intake'] is False
+          print('LINUXHW_REVIEWED_DERIVED_FACT_GATE=PASS')
+          print('COMPATIBILITY_VERIFIED=FALSE')
+          PY
+
+      - name: Require LVFS reference-only source to remain blocked
+        shell: bash
+        run: |
+          set +e
+          python scripts/hardware_external_observation_adapter.py \
+            examples/hardware-external-lvfs-reference-only-v0.1.json \
+            --output hcc-external-acceptance/lvfs-should-not-exist.json \
+            > hcc-external-acceptance/lvfs-blocked-result.json
+          rc=$?
+          set -e
+          test "$rc" -eq 3
+          test ! -e hcc-external-acceptance/lvfs-should-not-exist.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('hcc-external-acceptance/lvfs-blocked-result.json').read_text(encoding='utf-8'))
+          assert data['status'] == 'BLOCKED_EXTERNAL_SOURCE_NOT_IMPORTABLE'
+          assert data['report_written'] is False
+          assert data['compatibility_verified'] is False
+          assert data['safe_to_auto_apply'] is False
+          print('LVFS_REFERENCE_ONLY_GATE=PASS')
+          PY
+
+      - name: Retain fail-honest synthetic acceptance summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out=Path('hcc-external-acceptance/acceptance-summary.json')
+          record={
+              'schema_version':'0.1',
+              'real_external_user_device_records_copied':False,
+              'network_fetch_performed_by_adapter':False,
+              'linuxhw_reviewed_derived_fact_candidate_exercised':True,
+              'external_evidence_promoted_to_verified':False,
+              'lvfs_import_enabled':False,
+              'compatibility_certified':False,
+              'safe_to_auto_apply':False,
+              'production_ready':False,
+              'f04_complete':False,
+              'roadmap_complete':False,
+          }
+          out.write_text(json.dumps(record, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          print('HCC_EXTERNAL_SOURCE_GOVERNANCE=PASS')
+          print('F04_COMPLETE=FALSE')
+          PY
+
+      - name: Upload synthetic acceptance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: hcc-external-source-governance-${{ github.run_id }}
+          path: hcc-external-acceptance/
+          if-no-files-found: error
+          retention-days: 14
