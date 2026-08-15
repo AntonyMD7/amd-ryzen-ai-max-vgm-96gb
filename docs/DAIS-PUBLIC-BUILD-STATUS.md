@@ -22,12 +22,12 @@ This ledger records public source/reference progress without weakening the canon
 
 | ID | State | Current proving-ground evidence | Major remaining gates |
 |---|---|---|---|
-| F-01 SafeFix | IN PROGRESS | fail-closed SafeFix contract, recovery/approval lifecycle, tests | dedicated distribution; mutating adapter governance; real-world acceptance; release; external review |
-| F-02 Universal System Doctor | IN PROGRESS | cross-platform diagnostic/reference surfaces and privacy-minimizing system-doctor layer | broader adapters; real hardware acceptance; release; accessibility/multilingual validation |
-| F-03 Local AI Doctor | IN PROGRESS | readiness, accelerator, model-fit, setup planning, benchmark evidence, local/cloud decision layers | integrated end-to-end product; exact backend/model acceptance; release; broader platforms |
-| F-04 Hardware Compatibility Commons | IN PROGRESS | compatibility schema, VGM proving ground, compatibility-record contract | dedicated commons/database; community ingestion/moderation; independent reports; release |
-| F-05 Universal Evidence Standard | IN PROGRESS | Universal Evidence schema/examples/validator/action plus interoperability direction | signed in-toto/SLSA mappings; external review; dedicated standard/release |
-| F-06 Accessible AI | IN PROGRESS | accessible reporting, inclusion contracts, multilingual/plain-language planning | real UI/assistive-tech acceptance; broader languages; reusable distribution/release |
+| F-01 SafeFix | IN PROGRESS | fail-closed contract plus disposable file-only sandbox mutation, precondition, recovery-snapshot, attestation and exact rollback acceptance | dedicated distribution; governed native adapters; representative real-world acceptance; release; external review |
+| F-02 Universal System Doctor | IN PROGRESS | privacy-minimizing diagnostic layer, strict public report schema, and repeatable GitHub-hosted Ubuntu read-only acceptance evidence | Windows/macOS and representative hardware acceptance; broader adapters; release; independent review |
+| F-03 Local AI Doctor | IN PROGRESS | readiness, accelerator, model-fit, setup, quantization, benchmark, local/cloud policy and integrated evidence-gated orchestration | exact backend/model/workload acceptance; broader platforms; dedicated distribution/release |
+| F-04 Hardware Compatibility Commons | IN PROGRESS | compatibility schemas, VGM proving ground, privacy-minimized public intake validator and claim/evidence gates | dedicated commons/database; community ingestion/moderation; independent real reports; release |
+| F-05 Universal Evidence Standard | IN PROGRESS | schema/examples/validator/action plus fail-honest in-toto/SLSA/OpenTelemetry/W3C PROV/SPDX/CycloneDX mapping layer | signed-envelope verification profiles; external interoperability fixtures/review; dedicated standard/release |
+| F-06 Accessible AI | IN PROGRESS | semantic multilingual reporting, hosted static checks, accessibility/inclusion contracts, and privacy-safe supporting acceptance evidence protocol | specialist automated-engine acceptance; multiple real assistive-technology environments; disability-inclusive usability evidence; broader languages; dedicated distribution/release |
 
 ## Opportunity coverage register
 
@@ -85,6 +85,14 @@ Every item below was merged only after its branch `Safety checks` workflow succe
 | #37 | P-183–P-194 science/research/environment | MERGED / CI PASS |
 | #38 | P-195–P-210 AI agents/memory/governance | MERGED / CI PASS |
 | #39 | P-211–P-227 infrastructure/fleet/evidence consolidation | MERGED / CI PASS |
+| #40 | 227/227 source/reference status ledger | MERGED / CI PASS |
+| #41 | F-05 standards interoperability mappings | MERGED / CI PASS |
+| #42 | machine-checkable P-001–P-227 + F-01–F-06 coverage verifier | MERGED / CI PASS |
+| #43 | F-01 disposable sandbox recovery acceptance | MERGED / CI PASS |
+| #44 | F-02 hosted Ubuntu acceptance + F-06 static accessible-report evidence | MERGED / CI PASS |
+| #45 | F-03 integrated Local AI Doctor orchestration | MERGED / CI PASS |
+| #46 | F-04 privacy-safe compatibility intake | MERGED / CI PASS |
+| #47 | F-06 supporting accessibility acceptance evidence protocol | MERGED / CI PASS |
 
 Earlier merged PRs #1–#22 establish the six flagship foundations and the remaining P-001–P-133 proving-ground coverage. The `learning-git` public repository separately carries P-119 and complementary repository-quality exercises.
 
@@ -97,7 +105,7 @@ The portfolio explicitly prefers established upstreams where they already own th
 - repository/supply-chain: OpenSSF Scorecard, Gitleaks, markdownlint, lychee, OSV tooling, SPDX/REUSE;
 - evidence/provenance/observability: in-toto Attestation Framework, SLSA, OpenTelemetry, W3C PROV, SPDX/CycloneDX where applicable;
 - research/data: Crossref, Zotero, ReproZip, RO-Crate, Frictionless Data Package;
-- accessibility/public services: WCAG/WAI-ARIA guidance and mature public-service design systems;
+- accessibility/public services: WCAG/WAI evaluation guidance, axe-core/axe CLI, Pa11y and mature public-service design systems;
 - health information: NLM RxNorm, DailyMed/FDA SPL, NCBI Entrez/PubMed/PMC, HL7 FHIR as applicable;
 - community/ministry: mature scheduling/CRM/event systems and licensed CrossWire/STEPBible ecosystems;
 - farm/business/finance: farmOS, mature ERP/accounting/personal-finance systems where their exact license and deployment model fit;
@@ -111,16 +119,16 @@ The following prevent a truthful `COMPLETE` state for most or all entries:
 2. Each dedicated project needs its own explicit license decision, README/START-HERE/architecture/recovery/security/contribution surface as applicable.
 3. Most projects still need representative real-world acceptance beyond hosted unit/contract CI.
 4. High-stakes domains require independent domain review and jurisdiction/current-source validation.
-5. Accessibility, assistive-technology and multilingual acceptance need broader human validation.
+5. Accessibility, assistive-technology and multilingual acceptance need broader human validation; automated tools are supporting evidence, not conformance proof.
 6. Public examples/evidence must remain sanitized; credentials, private infrastructure, prompt/message content, patient/customer/donor personal data and other sensitive material are prohibited.
 7. Versioned releases/tags, retained acceptance evidence and canonical completion handovers remain outstanding.
 
 ## Next phase
 
-The portfolio has moved from **opportunity enumeration** to **227/227 source/reference coverage**. The next dependency order is therefore depth rather than breadth:
+The portfolio has moved from **opportunity enumeration** to **227/227 source/reference coverage** and is now deepening the flagship foundations. The next dependency order is:
 
 1. extract the six flagship foundations into dedicated reusable distributions when repository creation becomes governed/available;
-2. choose highest-impact projects for end-to-end productization and real-world acceptance;
-3. add exact upstream interoperability suites and signed evidence mappings;
-4. create repeatable release/completion pipelines;
+2. add representative cross-platform, assistive-technology and specialist-engine acceptance without weakening privacy or claim integrity;
+3. choose highest-impact opportunity projects for end-to-end productization and real-world acceptance;
+4. add exact upstream interoperability suites, signed evidence profiles and repeatable release/completion pipelines;
 5. only then promote individual roadmap items from `IN PROGRESS` to `COMPLETE` when every canonical gate is evidenced.
