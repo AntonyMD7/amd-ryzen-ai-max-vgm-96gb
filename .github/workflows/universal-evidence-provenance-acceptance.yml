@@ -130,7 +130,7 @@ jobs:
             --bundle provenance-acceptance/provenance.sigstore.json \
             --certificate-identity "$identity" \
             --certificate-oidc-issuer "$issuer" \
-            --type=unused \
+            --type='https://slsa.dev/provenance/v1' \
             --digest "$digest" \
             --digestAlg sha256 \
             > provenance-acceptance/verify-attestation.txt
@@ -224,7 +224,7 @@ jobs:
             --bundle provenance-acceptance/provenance.sigstore.json \
             --certificate-identity 'https://github.com/example/incorrect/.github/workflows/incorrect.yml@refs/heads/main' \
             --certificate-oidc-issuer "$issuer" \
-            --type=unused \
+            --type='https://slsa.dev/provenance/v1' \
             --digest "$digest" \
             --digestAlg sha256 \
             > provenance-acceptance/wrong-identity.txt 2>&1; then
@@ -238,7 +238,7 @@ jobs:
             --bundle provenance-acceptance/provenance.sigstore.json \
             --certificate-identity "$(cat provenance-acceptance/expected-signer-identity.txt)" \
             --certificate-oidc-issuer "$issuer" \
-            --type=unused \
+            --type='https://slsa.dev/provenance/v1' \
             --digest "$wrong_digest" \
             --digestAlg sha256 \
             > provenance-acceptance/wrong-subject.txt 2>&1; then
