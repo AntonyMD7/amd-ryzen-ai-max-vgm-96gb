@@ -7,9 +7,10 @@ Sigstore trusted_root.json target, and emits sanitized evidence. It performs
 network reads only and does not alter user devices or production systems.
 
 A successful run proves only that this exact client/tool/version completed the
-TUF workflow from the supplied bootstrap root at run time. It does not prove
-future freshness, revocation awareness, resistance to every TUF attack, artifact
-semantic goodness, production readiness, or DAIS roadmap completion.
+TUF workflow from the supplied bootstrap root at run time. It does not prove a
+historic multi-root rotation chain, future freshness, revocation awareness,
+resistance to every TUF attack, artifact semantic goodness, production
+readiness, or DAIS roadmap completion.
 """
 
 from __future__ import annotations
@@ -94,7 +95,6 @@ def run_refresh(
     metadata_dir.mkdir(parents=True, exist_ok=True)
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # Lazy import keeps pure contract tests independent of the optional network client dependency.
     from tuf.ngclient import Updater
 
     updater = Updater(
@@ -112,9 +112,9 @@ def run_refresh(
     if not isinstance(current_signed, dict) or current_signed.get("_type") != "root":
         raise TufRefreshAcceptanceError("refreshed root is malformed")
     refreshed_root_version = current_signed.get("version")
-    if not isinstance(refreshed_root_version, int) or refreshed_root_version <= expected_root_version:
+    if not isinstance(refreshed_root_version, int) or refreshed_root_version < expected_root_version:
         raise TufRefreshAcceptanceError(
-            "authenticated refresh did not advance beyond the pinned bootstrap root version"
+            "authenticated refresh regressed below the pinned bootstrap root version"
         )
 
     target_info = updater.get_targetinfo(target_name)
@@ -148,7 +148,8 @@ def run_refresh(
             "metadata_base_url": metadata_base_url,
             "target_base_url": target_base_url,
             "refreshed_root_version": refreshed_root_version,
-            "authenticated_root_chain_advanced": True,
+            "authenticated_root_not_regressed": refreshed_root_version >= expected_root_version,
+            "historic_root_rotation_exercised": refreshed_root_version > expected_root_version,
             "top_level_refresh_succeeded": True,
         },
         "verified_target": {
@@ -168,6 +169,7 @@ def run_refresh(
             "credential_input_required": False,
         },
         "claims": {
+            "historic_multi_root_rotation_proven": False,
             "future_trusted_root_freshness_proven": False,
             "future_revocation_awareness_proven": False,
             "all_tuf_attack_classes_exercised": False,
