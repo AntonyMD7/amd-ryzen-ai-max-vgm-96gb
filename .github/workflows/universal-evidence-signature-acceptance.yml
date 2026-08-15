@@ -10,6 +10,10 @@ permissions:
 jobs:
   cosign-blob-verification:
     runs-on: ubuntu-24.04
+    env:
+      # Public, fixed fixture password for an ephemeral CI-only Cosign key.
+      # This is not a production credential and the private key is destroyed.
+      COSIGN_PASSWORD: dais-disposable-ci-fixture-only
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,24 +23,21 @@ jobs:
         with:
           cosign-release: 'v3.0.6'
 
-      - name: Create disposable local verification keypair
+      - name: Create disposable Cosign-native keypair
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p signature-acceptance
-          # Cosign v3 accepts PKCS#8 private-key PEM. OpenSSL genpkey emits
-          # PKCS#8 instead of the older SEC1 "EC PRIVATE KEY" form.
-          openssl genpkey \
-            -algorithm EC \
-            -pkeyopt ec_paramgen_curve:P-256 \
-            -out signature-acceptance/ephemeral-private.pem
-          openssl pkey \
-            -in signature-acceptance/ephemeral-private.pem \
-            -pubout \
-            -out signature-acceptance/ephemeral-public.pem
-          chmod 600 signature-acceptance/ephemeral-private.pem
+          (
+            cd signature-acceptance
+            cosign generate-key-pair --output-key-prefix ephemeral
+          )
+          test -s signature-acceptance/ephemeral.key
+          test -s signature-acceptance/ephemeral.pub
+          chmod 600 signature-acceptance/ephemeral.key
           cosign version
           echo 'KEY_SCOPE=DISPOSABLE_CI_FIXTURE_ONLY'
+          echo 'PRODUCTION_CREDENTIAL_USED=FALSE'
 
       - name: Sign exact Universal Evidence fixture without identity or transparency claims
         shell: bash
@@ -47,7 +48,7 @@ jobs:
           cosign sign-blob \
             --yes \
             --use-signing-config=false \
-            --key signature-acceptance/ephemeral-private.pem \
+            --key signature-acceptance/ephemeral.key \
             --bundle signature-acceptance/evidence.sigstore.json \
             signature-acceptance/evidence.json \
             > signature-acceptance/signature.txt
@@ -62,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           cosign verify-blob \
-            --key signature-acceptance/ephemeral-public.pem \
+            --key signature-acceptance/ephemeral.pub \
             --bundle signature-acceptance/evidence.sigstore.json \
             signature-acceptance/evidence.json \
             > signature-acceptance/verify-exact.txt
@@ -76,7 +77,7 @@ jobs:
           cp signature-acceptance/evidence.json signature-acceptance/evidence-tampered.json
           printf '\n' >> signature-acceptance/evidence-tampered.json
           if cosign verify-blob \
-            --key signature-acceptance/ephemeral-public.pem \
+            --key signature-acceptance/ephemeral.pub \
             --bundle signature-acceptance/evidence.sigstore.json \
             signature-acceptance/evidence-tampered.json \
             > signature-acceptance/verify-tampered.txt 2>&1; then
@@ -90,8 +91,8 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -f signature-acceptance/ephemeral-private.pem
-          test ! -e signature-acceptance/ephemeral-private.pem
+          rm -f signature-acceptance/ephemeral.key
+          test ! -e signature-acceptance/ephemeral.key
           echo 'PRIVATE_KEY_RETAINED=FALSE'
 
       - name: Write fail-honest claim-boundary record
@@ -154,7 +155,7 @@ jobs:
             signature-acceptance/evidence.json
             signature-acceptance/evidence.sha256
             signature-acceptance/evidence.sigstore.json
-            signature-acceptance/ephemeral-public.pem
+            signature-acceptance/ephemeral.pub
             signature-acceptance/signature.txt
             signature-acceptance/verify-exact.txt
             signature-acceptance/verify-tampered.txt
