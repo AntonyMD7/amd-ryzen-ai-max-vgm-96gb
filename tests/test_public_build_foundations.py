@@ -9,6 +9,7 @@ import jsonschema
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from local_ai_readiness import collect
 from safefix_contract import ContractError, GateContext, Stage, transition_path, validate_transition
 
 
@@ -16,6 +17,11 @@ def test_evidence_example_validates() -> None:
     schema = json.loads((ROOT / "schemas/universal-evidence-v0.1.schema.json").read_text())
     example = json.loads((ROOT / "examples/universal-evidence-readonly-example.json").read_text())
     jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(example)
+
+
+def test_hardware_compatibility_schema_is_valid_json_schema() -> None:
+    schema = json.loads((ROOT / "schemas/hardware-compatibility-report-v0.1.schema.json").read_text())
+    jsonschema.Draft202012Validator.check_schema(schema)
 
 
 def test_mutation_requires_recovery() -> None:
@@ -66,3 +72,17 @@ def test_readonly_schema_cannot_smuggle_mutation_without_controls() -> None:
     validator = jsonschema.Draft202012Validator(schema)
     errors = list(validator.iter_errors(example))
     assert errors, "mutating evidence without approval/recovery controls must be rejected"
+
+
+def test_local_ai_collector_declares_read_only_privacy_contract() -> None:
+    data = collect()
+    assert data["collector"]["mode"] == "READ_ONLY"
+    assert data["interpretation"]["status"] == "DISCOVERY_ONLY"
+    assert data["privacy"] == {
+        "username_collected": False,
+        "hostname_collected": False,
+        "network_addresses_collected": False,
+        "environment_values_collected": False,
+        "credentials_collected": False,
+    }
+    assert all(value is False for value in data["mutation"].values())
