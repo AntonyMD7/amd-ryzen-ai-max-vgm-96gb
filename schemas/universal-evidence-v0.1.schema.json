@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/schemas/universal-evidence-v0.1.schema.json",
+  "title": "DAIS Universal Evidence Record v0.1",
+  "description": "Portable evidence envelope for read-only discovery, governed mutation, and verification. This draft complements rather than replaces standards such as in-toto attestations, SLSA provenance, SPDX, and OpenTelemetry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "evidence_type",
+    "roadmap_ids",
+    "subject",
+    "operation",
+    "observed_at_utc",
+    "result",
+    "rollback",
+    "safety",
+    "provenance",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "evidence_id": {"type": "string", "minLength": 8},
+    "evidence_type": {
+      "type": "string",
+      "enum": ["discovery", "preflight", "mutation", "verification", "acceptance", "release"]
+    },
+    "roadmap_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^(F-[0-9]{2}|P-[0-9]{3})$"}
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": {"type": "string", "enum": ["device", "repository", "software", "configuration", "dataset", "workflow", "other"]},
+        "id": {"type": "string", "minLength": 1},
+        "version": {"type": ["string", "null"]}
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "name", "intended_change", "authorization_ref"],
+      "properties": {
+        "classification": {"type": "string", "enum": ["READ_ONLY", "MUTATING", "VERIFY"]},
+        "name": {"type": "string", "minLength": 1},
+        "intended_change": {"type": ["string", "null"]},
+        "authorization_ref": {"type": ["string", "null"]},
+        "tool": {"type": ["string", "null"]},
+        "tool_version": {"type": ["string", "null"]}
+      }
+    },
+    "observed_at_utc": {"type": "string", "format": "date-time"},
+    "pre_state": {"type": ["object", "null"]},
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"type": "string", "enum": ["PASS", "FAIL", "NO_RESPONSE", "BLOCKED", "NOT_RUN"]},
+        "exit_code": {"type": ["integer", "null"]},
+        "summary": {"type": ["string", "null"]}
+      }
+    },
+    "post_state": {"type": ["object", "null"]},
+    "artifacts": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "sha256"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"},
+          "media_type": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "established"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "established": {"type": "boolean"},
+        "reference": {"type": ["string", "null"]},
+        "exercised": {"type": ["boolean", "null"]}
+      }
+    },
+    "acceptance": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "NOT_RUN"]},
+          "evidence_ref": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["secrets_redacted", "private_infrastructure_redacted", "human_approval_required", "approval_present"],
+      "properties": {
+        "secrets_redacted": {"const": true},
+        "private_infrastructure_redacted": {"const": true},
+        "human_approval_required": {"type": "boolean"},
+        "approval_present": {"type": "boolean"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["producer", "source_commit"],
+      "properties": {
+        "producer": {"type": "string", "minLength": 1},
+        "source_commit": {"type": ["string", "null"], "pattern": "^[a-fA-F0-9]{7,40}$"},
+        "upstream_refs": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"operation": {"properties": {"classification": {"const": "MUTATING"}}}}},
+      "then": {
+        "properties": {
+          "operation": {"properties": {"authorization_ref": {"type": "string", "minLength": 1}}},
+          "rollback": {"properties": {"required": {"const": true}, "established": {"const": true}}},
+          "safety": {"properties": {"human_approval_required": {"const": true}, "approval_present": {"const": true}}}
+        }
+      }
+    }
+  ]
+}
