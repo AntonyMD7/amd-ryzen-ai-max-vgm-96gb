@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dais/accessible-ai-acceptance-v0.1.schema.json",
+  "title": "DAIS Accessible AI supporting acceptance evidence v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_type",
+    "evidence_class",
+    "subject",
+    "standard_target",
+    "environment",
+    "checks",
+    "privacy",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "evidence_type": {"const": "accessible-ai-supporting-acceptance"},
+    "evidence_class": {
+      "enum": [
+        "SYNTHETIC_CONFORMANCE",
+        "AUTOMATED_TOOL",
+        "MANUAL_ASSISTIVE_TECH",
+        "AGGREGATED_REAL_USER_USABILITY"
+      ]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "artifact_ref", "sha256"],
+      "properties": {
+        "artifact_kind": {"enum": ["HTML", "WEB_APP", "CLI_TUI", "DOCUMENT", "OTHER"]},
+        "artifact_ref": {"type": "string", "minLength": 1, "maxLength": 240},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "standard_target": {
+      "enum": ["WCAG_2_2_A", "WCAG_2_2_AA", "ACCESSIBILITY_BY_DESIGN_OTHER"]
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os_family", "browser_family", "assistive_technology"],
+      "properties": {
+        "os_family": {"type": "string", "minLength": 1, "maxLength": 80},
+        "browser_family": {"type": "string", "minLength": 1, "maxLength": 80},
+        "assistive_technology": {"type": "string", "minLength": 1, "maxLength": 120},
+        "tool_name": {"type": "string", "maxLength": 100},
+        "tool_version": {"type": "string", "maxLength": 80}
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "keyboard_only",
+        "screen_reader",
+        "zoom_reflow_400",
+        "reduced_motion",
+        "language_semantics",
+        "automated_rules"
+      ],
+      "properties": {
+        "keyboard_only": {"$ref": "#/$defs/check"},
+        "screen_reader": {"$ref": "#/$defs/check"},
+        "zoom_reflow_400": {"$ref": "#/$defs/check"},
+        "reduced_motion": {"$ref": "#/$defs/check"},
+        "language_semantics": {"$ref": "#/$defs/check"},
+        "automated_rules": {"$ref": "#/$defs/check"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "participant_identity_stored",
+        "participant_contact_stored",
+        "credential_values_stored",
+        "private_content_stored",
+        "consent_recorded_when_people_involved"
+      ],
+      "properties": {
+        "participant_identity_stored": {"const": false},
+        "participant_contact_stored": {"const": false},
+        "credential_values_stored": {"const": false},
+        "private_content_stored": {"const": false},
+        "consent_recorded_when_people_involved": {"type": "boolean"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wcag_conformance",
+        "all_accessibility_issues_found",
+        "real_user_acceptance",
+        "production_ready"
+      ],
+      "properties": {
+        "wcag_conformance": {"const": false},
+        "all_accessibility_issues_found": {"const": false},
+        "real_user_acceptance": {"const": false},
+        "production_ready": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence_ref", "notes"],
+      "properties": {
+        "status": {"enum": ["PASS", "FAIL", "NOT_RUN", "NOT_APPLICABLE"]},
+        "evidence_ref": {"type": "string", "maxLength": 240},
+        "notes": {"type": "string", "maxLength": 600}
+      }
+    }
+  }
+}

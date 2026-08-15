@@ -1,0 +1,61 @@
+{
+  "schema_version": "0.1",
+  "evidence_type": "accessible-ai-supporting-acceptance",
+  "evidence_class": "SYNTHETIC_CONFORMANCE",
+  "subject": {
+    "artifact_kind": "HTML",
+    "artifact_ref": "synthetic/system-doctor-en.html",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "standard_target": "WCAG_2_2_AA",
+  "environment": {
+    "os_family": "synthetic",
+    "browser_family": "synthetic",
+    "assistive_technology": "not run"
+  },
+  "checks": {
+    "keyboard_only": {
+      "status": "NOT_RUN",
+      "evidence_ref": "",
+      "notes": "Synthetic schema fixture only."
+    },
+    "screen_reader": {
+      "status": "NOT_RUN",
+      "evidence_ref": "",
+      "notes": "Synthetic schema fixture only."
+    },
+    "zoom_reflow_400": {
+      "status": "NOT_RUN",
+      "evidence_ref": "",
+      "notes": "Synthetic schema fixture only."
+    },
+    "reduced_motion": {
+      "status": "NOT_RUN",
+      "evidence_ref": "",
+      "notes": "Synthetic schema fixture only."
+    },
+    "language_semantics": {
+      "status": "PASS",
+      "evidence_ref": "tests/test_system_doctor_accessibility.py",
+      "notes": "Synthetic fixture points to an existing static language-semantic regression test."
+    },
+    "automated_rules": {
+      "status": "NOT_RUN",
+      "evidence_ref": "",
+      "notes": "No third-party accessibility engine was executed for this fixture."
+    }
+  },
+  "privacy": {
+    "participant_identity_stored": false,
+    "participant_contact_stored": false,
+    "credential_values_stored": false,
+    "private_content_stored": false,
+    "consent_recorded_when_people_involved": false
+  },
+  "claims": {
+    "wcag_conformance": false,
+    "all_accessibility_issues_found": false,
+    "real_user_acceptance": false,
+    "production_ready": false
+  }
+}
