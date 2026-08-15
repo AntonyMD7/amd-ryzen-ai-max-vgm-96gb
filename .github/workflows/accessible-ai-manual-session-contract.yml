@@ -1,0 +1,75 @@
+name: Accessible AI manual session contract
+
+on:
+  push:
+    paths:
+      - 'schemas/accessible-ai-manual-session-v0.1.schema.json'
+      - 'scripts/accessibility_manual_session.py'
+      - 'scripts/accessibility_acceptance_validate.py'
+      - 'tests/test_accessibility_manual_session.py'
+      - 'tests/test_accessibility_acceptance.py'
+      - 'examples/accessible-ai-manual-session-synthetic-v0.1.json'
+      - 'docs/ACCESSIBLE-AI-MANUAL-AT-SESSION.md'
+      - '.github/workflows/accessible-ai-manual-session-contract.yml'
+  pull_request:
+    paths:
+      - 'schemas/accessible-ai-manual-session-v0.1.schema.json'
+      - 'scripts/accessibility_manual_session.py'
+      - 'scripts/accessibility_acceptance_validate.py'
+      - 'tests/test_accessibility_manual_session.py'
+      - 'tests/test_accessibility_acceptance.py'
+      - 'examples/accessible-ai-manual-session-synthetic-v0.1.json'
+      - 'docs/ACCESSIBLE-AI-MANUAL-AT-SESSION.md'
+      - '.github/workflows/accessible-ai-manual-session-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  manual-session-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check 'jsonschema>=4.23,<5' 'pytest>=8,<9'
+
+      - name: Compile contract sources
+        run: python -m compileall -q scripts/accessibility_manual_session.py tests/test_accessibility_manual_session.py
+
+      - name: Run manual-session and supporting-evidence contract tests
+        run: python -m pytest -q tests/test_accessibility_manual_session.py tests/test_accessibility_acceptance.py
+
+      - name: Exercise synthetic protocol fixture without acceptance overclaim
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/accessibility_manual_session.py \
+            examples/accessible-ai-manual-session-synthetic-v0.1.json \
+            --supporting-record-out /tmp/manual-at-supporting.json \
+            > /tmp/manual-at-result.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('/tmp/manual-at-result.json').read_text(encoding='utf-8'))
+          supporting = json.loads(Path('/tmp/manual-at-supporting.json').read_text(encoding='utf-8'))
+
+          assert result['status'] == 'SYNTHETIC_ONLY_NOT_ACCEPTANCE'
+          assert result['supporting_record_status'] == 'SYNTHETIC_ONLY_NOT_ACCEPTANCE'
+          assert result['wcag_conformance_certified_by_validator'] is False
+          assert result['roadmap_completion_certified_by_validator'] is False
+          assert supporting['evidence_class'] == 'SYNTHETIC_CONFORMANCE'
+          assert all(value is False for value in supporting['claims'].values())
+
+          print('MANUAL_AT_PROTOCOL_CONTRACT=PASS')
+          print('REAL_MANUAL_AT_RUN=FALSE')
+          print('WCAG_CONFORMANCE_CLAIMED=FALSE')
+          print('ROADMAP_COMPLETION_CLAIMED=FALSE')
+          PY
