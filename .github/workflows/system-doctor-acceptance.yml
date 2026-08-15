@@ -1,0 +1,100 @@
+name: System Doctor hosted acceptance
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-hosted-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install schema validator
+        run: python -m pip install --disable-pip-version-check 'jsonschema>=4.23,<5'
+
+      - name: Collect, validate, render, and attest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p acceptance-artifacts
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import sys
+
+          import jsonschema
+
+          sys.path.insert(0, 'scripts')
+          from accessible_report import render_html
+          from system_doctor import collect
+
+          out = Path('acceptance-artifacts')
+          report = collect()
+          schema = json.loads(Path('schemas/system-doctor-report-v0.1.schema.json').read_text(encoding='utf-8'))
+          jsonschema.Draft202012Validator(schema).validate(report)
+
+          assert report['collector']['mode'] == 'READ_ONLY'
+          assert all(value is False for value in report['privacy'].values())
+          assert all(value is False for value in report['mutation'].values())
+
+          report_text = json.dumps(report, indent=2, sort_keys=True) + '\n'
+          en = render_html(report, 'en')
+          es = render_html(report, 'es')
+          for html, lang in ((en, 'en'), (es, 'es')):
+              assert f'<html lang="{lang}">' in html
+              assert 'href="#report"' in html
+              assert 'prefers-reduced-motion' in html
+              assert '<main id="report" tabindex="-1">' in html
+
+          (out / 'system-doctor-report.json').write_text(report_text, encoding='utf-8')
+          (out / 'system-doctor-en.html').write_text(en, encoding='utf-8')
+          (out / 'system-doctor-es.html').write_text(es, encoding='utf-8')
+
+          def digest(text: str) -> str:
+              return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+          acceptance = {
+              'schema_version': '0.1',
+              'evidence_type': 'system-doctor-github-hosted-acceptance',
+              'environment_class': 'GITHUB_HOSTED_UBUNTU_EPHEMERAL',
+              'workflow_sha': os.environ.get('GITHUB_SHA', ''),
+              'report_sha256': digest(report_text),
+              'english_html_sha256': digest(en),
+              'spanish_html_sha256': digest(es),
+              'schema_validation': 'PASS',
+              'privacy_contract': 'PASS',
+              'read_only_contract': 'PASS',
+              'semantic_html_static_checks': 'PASS',
+              'wcag_conformance_claimed': False,
+              'real_user_assistive_technology_acceptance_claimed': False,
+              'windows_acceptance_claimed': False,
+              'macos_acceptance_claimed': False,
+              'production_safe_to_infer': False,
+          }
+          (out / 'acceptance.json').write_text(json.dumps(acceptance, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print('SYSTEM_DOCTOR_HOSTED_UBUNTU_ACCEPTANCE=PASS')
+          print('WCAG_CONFORMANCE_CLAIMED=FALSE')
+          print('PRODUCTION_SAFE_TO_INFER=FALSE')
+          PY
+
+      - name: Upload sanitized acceptance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-doctor-hosted-acceptance
+          path: acceptance-artifacts/
+          if-no-files-found: error
+          retention-days: 14
