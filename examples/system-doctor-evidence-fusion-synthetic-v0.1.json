@@ -1,0 +1,75 @@
+{
+  "schema_version": "0.1",
+  "case_id": "synthetic-f02-fusion-001",
+  "target": {
+    "os_family": "Linux",
+    "architecture": "x86_64",
+    "environment_class": "SYNTHETIC"
+  },
+  "observations": [
+    {
+      "observation_id": "obs-storage-01",
+      "domain": "STORAGE",
+      "status": "REVIEW",
+      "confidence": "HIGH",
+      "summary_key": "LOW_STORAGE_HEADROOM",
+      "recommendation_key": "REVIEW_STORAGE_CAPACITY",
+      "verification_key": "RECHECK_STORAGE_HEADROOM",
+      "source": {
+        "adapter": "PSUTIL",
+        "tool": "psutil",
+        "version": "7.2.2",
+        "evidence_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "collected_at": "2026-08-15T09:00:00Z"
+      }
+    },
+    {
+      "observation_id": "obs-driver-01",
+      "domain": "DRIVER",
+      "status": "OK",
+      "confidence": "LOW",
+      "summary_key": "GENERIC_DRIVER_CHECK_OK",
+      "recommendation_key": "NO_ACTION_FROM_THIS_OBSERVATION",
+      "verification_key": "VERIFY_WITH_VENDOR_DIAGNOSTIC",
+      "source": {
+        "adapter": "OSQUERY",
+        "tool": "osquery",
+        "version": "5.x-reference",
+        "evidence_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "collected_at": "2026-08-15T09:00:01Z"
+      }
+    },
+    {
+      "observation_id": "obs-driver-02",
+      "domain": "DRIVER",
+      "status": "REVIEW",
+      "confidence": "HIGH",
+      "summary_key": "VENDOR_DRIVER_REVIEW_REQUIRED",
+      "recommendation_key": "REVIEW_VENDOR_DRIVER_STATE",
+      "verification_key": "VERIFY_WITH_VENDOR_DIAGNOSTIC",
+      "source": {
+        "adapter": "VENDOR_DIAGNOSTIC",
+        "tool": "synthetic-vendor-adapter",
+        "version": "0.0-test",
+        "evidence_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "collected_at": "2026-08-15T09:00:02Z"
+      }
+    },
+    {
+      "observation_id": "obs-memory-01",
+      "domain": "MEMORY",
+      "status": "UNKNOWN",
+      "confidence": "LOW",
+      "summary_key": "DEEP_MEMORY_HEALTH_NOT_TESTED",
+      "recommendation_key": "RUN_APPROPRIATE_MEMORY_DIAGNOSTIC",
+      "verification_key": "VERIFY_MEMORY_WITH_SPECIALIST_TOOL",
+      "source": {
+        "adapter": "SYSTEM_DOCTOR_BASELINE",
+        "tool": "system_doctor.py",
+        "version": "0.1.0",
+        "evidence_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "collected_at": "2026-08-15T09:00:03Z"
+      }
+    }
+  ]
+}

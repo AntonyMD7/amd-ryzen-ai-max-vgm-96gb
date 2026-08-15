@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dais/system-doctor-observation-case-v0.1.schema.json",
+  "title": "DAIS Universal System Doctor bounded observation case v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "case_id", "target", "observations"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "case_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os_family", "architecture", "environment_class"],
+      "properties": {
+        "os_family": {"enum": ["Linux", "Windows", "Darwin", "Other"]},
+        "architecture": {"type": "string", "minLength": 1, "maxLength": 96},
+        "environment_class": {"enum": ["SYNTHETIC", "HOSTED_CI", "PHYSICAL_NON_PRODUCTION", "PRODUCTION_OBSERVATION"]}
+      }
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/observation"}
+    }
+  },
+  "$defs": {
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observation_id", "domain", "status", "confidence", "summary_key", "recommendation_key", "verification_key", "source"],
+      "properties": {
+        "observation_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "domain": {"enum": ["CPU", "MEMORY", "STORAGE", "THERMAL", "POWER", "OS", "DRIVER", "NETWORK", "SERVICE", "SECURITY", "PERIPHERAL"]},
+        "status": {"enum": ["OK", "NOTICE", "REVIEW", "UNKNOWN"]},
+        "confidence": {"enum": ["LOW", "MEDIUM", "HIGH"]},
+        "summary_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,95}$"},
+        "recommendation_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,95}$"},
+        "verification_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,95}$"},
+        "source": {"$ref": "#/$defs/source"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "tool", "version", "evidence_sha256", "collected_at"],
+      "properties": {
+        "adapter": {"enum": ["SYSTEM_DOCTOR_BASELINE", "PSUTIL", "OSQUERY", "SMARTCTL", "WINDOWS_CIM", "MACOS_NATIVE", "LINUX_NATIVE", "VENDOR_DIAGNOSTIC", "OTHER_BOUNDED_ADAPTER"]},
+        "tool": {"type": "string", "minLength": 1, "maxLength": 96},
+        "version": {"type": "string", "minLength": 1, "maxLength": 96},
+        "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "collected_at": {"type": "string", "format": "date-time", "maxLength": 40}
+      }
+    }
+  }
+}
