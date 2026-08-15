@@ -1,0 +1,73 @@
+name: System Doctor psutil adapter acceptance
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-psutil-adapter:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            id: ubuntu-24.04
+          - runner: windows-2025
+            id: windows-2025
+          - runner: macos-15
+            id: macos-15
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bounded adapter dependencies
+        run: python -m pip install --disable-pip-version-check 'psutil==7.2.2' 'jsonschema>=4.23,<5' 'pytest>=8,<9'
+
+      - name: Run adapter contract tests against real psutil runtime
+        run: python -m pytest -q tests/test_system_doctor_psutil_adapter.py
+
+      - name: Produce sanitized acceptance record
+        run: python scripts/system_doctor_psutil_adapter.py --output system-doctor-psutil-${{ matrix.id }}.json
+
+      - name: Enforce acceptance truth boundary
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          path = Path('system-doctor-psutil-${{ matrix.id }}.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          claims = data['acceptance_claims']
+          assert claims['real_psutil_runtime_exercised'] is True
+          for key in (
+              'identity_data_collected',
+              'network_data_collected',
+              'process_data_collected',
+              'mutation_performed',
+              'physical_hardware_health_proven',
+              'root_cause_proven',
+              'production_safe_to_infer',
+              'roadmap_complete',
+          ):
+              assert claims[key] is False, (key, claims[key])
+          assert all(value is False for value in data['source_evidence']['privacy'].values())
+          assert all(value is False for value in data['source_evidence']['mutation'].values())
+          assert data['fused_result']['claims']['repair_authorized'] is False
+          print('SYSTEM_DOCTOR_PSUTIL_TRUTH_BOUNDARY=PASS')
+          print('PRODUCTION_SAFE_TO_INFER=FALSE')
+
+      - name: Upload sanitized hosted evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-doctor-psutil-${{ matrix.id }}-${{ github.run_id }}
+          path: system-doctor-psutil-${{ matrix.id }}.json
+          if-no-files-found: error
+          retention-days: 14
