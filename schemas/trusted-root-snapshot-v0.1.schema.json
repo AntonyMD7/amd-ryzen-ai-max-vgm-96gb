@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dais/trusted-root-snapshot-v0.1.schema.json",
+  "title": "DAIS Trusted Root Snapshot Record v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "source",
+    "acquired_at",
+    "trusted_root",
+    "tooling",
+    "refresh_policy",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "snapshot_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,100}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ecosystem", "retrieval_method", "source_uri"],
+      "properties": {
+        "ecosystem": {"const": "SIGSTORE_PUBLIC_GOOD"},
+        "retrieval_method": {"enum": ["TUF_CLIENT", "COSIGN_INITIALIZE"]},
+        "source_uri": {"type": "string", "pattern": "^https://[^\\s]+$", "maxLength": 1000}
+      }
+    },
+    "acquired_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "trusted_root": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "media_type",
+        "sha256",
+        "size_bytes",
+        "certificate_authority_count",
+        "transparency_log_count",
+        "timestamp_authority_count"
+      ],
+      "properties": {
+        "media_type": {"type": "string", "pattern": "^application/vnd\\.dev\\.sigstore\\.trustedroot\\.v[0-9.]+\\+json$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "certificate_authority_count": {"type": "integer", "minimum": 1},
+        "transparency_log_count": {"type": "integer", "minimum": 1},
+        "timestamp_authority_count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "tooling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifier", "verifier_version"],
+      "properties": {
+        "verifier": {"const": "cosign"},
+        "verifier_version": {"type": "string", "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$"}
+      }
+    },
+    "refresh_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_age_hours", "refresh_due_at", "previous_snapshot_record_sha256", "offline_import_approved"],
+      "properties": {
+        "max_age_hours": {"type": "integer", "minimum": 1, "maximum": 8760},
+        "refresh_due_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+        "previous_snapshot_record_sha256": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          ]
+        },
+        "offline_import_approved": {"type": "boolean"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tuf_metadata_verified_by_this_module",
+        "trusted_root_current_proven",
+        "future_revocation_awareness_proven",
+        "artifact_goodness_proven",
+        "semantic_truth_proven",
+        "production_readiness_proven",
+        "roadmap_completion_proven"
+      ],
+      "properties": {
+        "tuf_metadata_verified_by_this_module": {"const": false},
+        "trusted_root_current_proven": {"const": false},
+        "future_revocation_awareness_proven": {"const": false},
+        "artifact_goodness_proven": {"const": false},
+        "semantic_truth_proven": {"const": false},
+        "production_readiness_proven": {"const": false},
+        "roadmap_completion_proven": {"const": false}
+      }
+    }
+  }
+}
