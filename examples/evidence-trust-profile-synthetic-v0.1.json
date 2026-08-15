@@ -1,0 +1,27 @@
+{
+  "schema_version": "0.1",
+  "profile_id": "synthetic-ci-exact-identity",
+  "artifact": {
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "signer": {
+    "mode": "SIGSTORE_KEYLESS",
+    "exact_identity": "builder@example.invalid",
+    "exact_oidc_issuer": "https://issuer.example.invalid"
+  },
+  "transparency": {
+    "required": true
+  },
+  "timestamp": {
+    "required": true,
+    "accepted_sources": ["SIGSTORE_TSA", "REKOR_V2_TSA"]
+  },
+  "provenance": {
+    "builder_id_required": true,
+    "allowed_builder_ids": ["https://example.invalid/builders/hosted-ci"]
+  },
+  "claims": {
+    "artifact_goodness_inferred": false,
+    "semantic_truth_inferred": false
+  }
+}
