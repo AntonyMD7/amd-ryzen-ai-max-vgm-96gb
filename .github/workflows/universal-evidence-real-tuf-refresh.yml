@@ -37,7 +37,7 @@ jobs:
           python -m compileall -q scripts/tuf_refresh_acceptance.py tests/test_tuf_refresh_acceptance.py
           python -m pytest -q tests/test_tuf_refresh_acceptance.py
 
-      - name: Acquire immutable Sigstore root-5 bootstrap object
+      - name: Acquire immutable current Sigstore root bootstrap object
         shell: bash
         run: |
           set -euo pipefail
@@ -48,10 +48,10 @@ jobs:
             --show-error \
             --location \
             --retry 3 \
-            --output /tmp/sigstore-5.root.json \
-            'https://raw.githubusercontent.com/sigstore/root-signing/54c142857637d12732de93a71adaadd0e561c749/metadata/root_history/5.root.json'
+            --output /tmp/sigstore-current.root.json \
+            'https://raw.githubusercontent.com/sigstore/root-signing/54c142857637d12732de93a71adaadd0e561c749/metadata/root.json'
 
-      - name: Run python-tuf authenticated root-chain and target acceptance
+      - name: Run python-tuf authenticated top-level refresh and target acceptance
         shell: bash
         run: |
           set -euo pipefail
@@ -59,11 +59,11 @@ jobs:
           target_dir="$(mktemp -d)"
           trap 'rm -rf "$metadata_dir" "$target_dir"' EXIT
           python scripts/tuf_refresh_acceptance.py \
-            --bootstrap-root /tmp/sigstore-5.root.json \
+            --bootstrap-root /tmp/sigstore-current.root.json \
             --metadata-dir "$metadata_dir" \
             --target-dir "$target_dir" \
-            --expected-git-blob-sha1 38f80f940473ac167abae3db9bc6a94d0bdb8c4e \
-            --expected-root-version 5 \
+            --expected-git-blob-sha1 55115df1025e64a6be12548bb1a1fa09451fc7f4 \
+            --expected-root-version 15 \
             --output /tmp/tuf-refresh-evidence.json \
             > /tmp/tuf-refresh-result.json
           python - <<'PY'
@@ -73,18 +73,19 @@ jobs:
           data = json.loads(Path('/tmp/tuf-refresh-evidence.json').read_text(encoding='utf-8'))
           assert data['tooling']['client'] == 'python-tuf'
           assert data['tooling']['client_version'] == '7.0.0'
-          assert data['bootstrap']['root_version'] == 5
-          assert data['bootstrap']['git_blob_sha1'] == '38f80f940473ac167abae3db9bc6a94d0bdb8c4e'
-          assert data['refresh']['refreshed_root_version'] > 5
-          assert data['refresh']['authenticated_root_chain_advanced'] is True
+          assert data['bootstrap']['root_version'] == 15
+          assert data['bootstrap']['git_blob_sha1'] == '55115df1025e64a6be12548bb1a1fa09451fc7f4'
+          assert data['refresh']['refreshed_root_version'] >= 15
+          assert data['refresh']['authenticated_root_not_regressed'] is True
           assert data['refresh']['top_level_refresh_succeeded'] is True
           assert data['verified_target']['download_verified_by_tuf_metadata'] is True
           assert data['scope']['user_device_mutation_performed'] is False
           assert data['scope']['production_mutation_performed'] is False
           assert all(value is False for value in data['claims'].values())
           print('PYTHON_TUF_AUTHENTICATED_REFRESH=PASS')
-          print('ROOT_CHAIN_ADVANCED=TRUE')
+          print('CURRENT_ROOT_BOOTSTRAP=TRUE')
           print('TRUSTED_ROOT_TARGET_VERIFIED=TRUE')
+          print('HISTORIC_MULTI_ROOT_ROTATION_CLAIMED=FALSE')
           print('ROADMAP_COMPLETION_CLAIMED=FALSE')
           PY
 
@@ -95,7 +96,7 @@ jobs:
           gh --version | head -1 | tee /tmp/gh-version.txt
           gh attestation trusted-root \
             --tuf-url 'https://tuf-repo-cdn.sigstore.dev' \
-            --tuf-root /tmp/sigstore-5.root.json \
+            --tuf-root /tmp/sigstore-current.root.json \
             --verify-only
           printf '%s\n' 'GH_TUF_VERIFY_ONLY=PASS'
           printf '%s\n' 'INDEPENDENT_SECURITY_AUDIT_CLAIMED=FALSE'
