@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import sys
 
 
 MODULE_PATH = Path(__file__).parents[1] / "scripts" / "local_ai_setup_planner.py"
 spec = importlib.util.spec_from_file_location("local_ai_setup_planner", MODULE_PATH)
-planner = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
+planner = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = planner
 spec.loader.exec_module(planner)
 
 
