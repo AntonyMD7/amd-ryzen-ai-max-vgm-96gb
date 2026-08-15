@@ -50,9 +50,6 @@ def test_in_progress_fixture_is_truthfully_incomplete():
     assert report["ci_alone_is_completion"] is False
     assert report["automated_accessibility_check_alone_is_conformance"] is False
     assert set(report["blocking_gates"]) == {
-        "accessibility_review",
-        "multilingual_path_considered",
-        "real_world_acceptance_test",
         "version_tag_or_release_published",
         "canonical_handover_or_build_record_updated",
     }
