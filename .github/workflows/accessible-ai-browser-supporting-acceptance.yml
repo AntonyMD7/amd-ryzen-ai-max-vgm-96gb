@@ -1,0 +1,107 @@
+name: Accessible AI browser supporting acceptance
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  keyboard-reflow-supporting-evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned hosted acceptance dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'jsonschema==4.26.0' 'selenium==4.35.0'
+          google-chrome --version
+          "$CHROMEWEBDRIVER/chromedriver" --version
+
+      - name: Generate exact sanitized English and Spanish report artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p browser-accessibility/site browser-accessibility/evidence
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'scripts')
+          from accessible_report import render_html
+          from system_doctor import collect
+
+          report = collect()
+          assert report['collector']['mode'] == 'READ_ONLY'
+          assert all(value is False for value in report['privacy'].values())
+          assert all(value is False for value in report['mutation'].values())
+          out = Path('browser-accessibility/site')
+          (out / 'en.html').write_text(render_html(report, 'en'), encoding='utf-8')
+          (out / 'es.html').write_text(render_html(report, 'es'), encoding='utf-8')
+          print('SANITIZED_REPORT_ARTIFACTS=PASS')
+          PY
+
+      - name: Serve exact artifacts on loopback only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 8766 --bind 127.0.0.1 --directory browser-accessibility/site >/tmp/accessible-browser-http.log 2>&1 &
+          echo $! > /tmp/accessible-browser-http.pid
+          for i in {1..20}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8766/en.html >/dev/null; then
+              exit 0
+            fi
+            sleep 0.25
+          done
+          cat /tmp/accessible-browser-http.log >&2 || true
+          exit 1
+
+      - name: Exercise keyboard path and 320-CSS-pixel reflow proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          for lang in en es; do
+            python scripts/browser_accessibility_supporting_probe.py \
+              --url "http://127.0.0.1:8766/${lang}.html" \
+              --artifact "browser-accessibility/site/${lang}.html" \
+              --output "browser-accessibility/evidence/browser-${lang}.json" \
+              --lang "$lang" \
+              --chromedriver "$CHROMEWEBDRIVER/chromedriver"
+            python scripts/accessibility_acceptance_validate.py \
+              "browser-accessibility/evidence/browser-${lang}.json" \
+              > "browser-accessibility/evidence/browser-${lang}.validation.json"
+            grep -q 'AUTOMATED_SUPPORTING_EVIDENCE_NOT_CONFORMANCE' \
+              "browser-accessibility/evidence/browser-${lang}.validation.json"
+            grep -q '"wcag_conformance_certified_by_validator": false' \
+              "browser-accessibility/evidence/browser-${lang}.validation.json"
+          done
+          echo 'KEYBOARD_SUPPORTING_CHECK=PASS'
+          echo 'REFLOW_320_CSS_PROXY=PASS'
+          echo 'MANUAL_400_PERCENT_ZOOM_ACCEPTANCE_CLAIMED=FALSE'
+          echo 'SCREEN_READER_ACCEPTANCE_CLAIMED=FALSE'
+          echo 'WCAG_CONFORMANCE_CLAIMED=FALSE'
+
+      - name: Stop loopback server
+        if: always()
+        shell: bash
+        run: |
+          if test -f /tmp/accessible-browser-http.pid; then
+            kill "$(cat /tmp/accessible-browser-http.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload sanitized browser supporting evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessible-ai-browser-supporting-evidence
+          path: browser-accessibility/
+          if-no-files-found: error
+          retention-days: 14
