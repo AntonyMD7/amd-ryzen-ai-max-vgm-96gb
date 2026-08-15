@@ -24,9 +24,9 @@ on:
         required: true
         type: string
       completion_record:
-        description: 'Repository-relative canonical completion record'
+        description: 'Exact basename under examples/, for example public-build-completion-p025-in-progress.json'
         required: true
-        default: 'examples/public-build-completion-p025-in-progress.json'
+        default: 'public-build-completion-p025-in-progress.json'
         type: string
 
 permissions:
@@ -64,24 +64,33 @@ jobs:
         env:
           DISPATCH_TAG: ${{ inputs.candidate_tag }}
           DISPATCH_SOURCE: ${{ inputs.source_commit }}
-          DISPATCH_RECORD: ${{ inputs.completion_record }}
+          DISPATCH_RECORD_BASENAME: ${{ inputs.completion_record }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             tag="${DISPATCH_TAG}"
             source="${DISPATCH_SOURCE}"
-            record="${DISPATCH_RECORD}"
+            record_basename="${DISPATCH_RECORD_BASENAME}"
           else
             tag="v0.1.0-rc.1"
             source="$(git rev-parse HEAD)"
-            record="examples/public-build-completion-p025-in-progress.json"
+            record_basename="public-build-completion-p025-in-progress.json"
           fi
 
-          case "$record" in
-            examples/public-build-completion-*.json) ;;
-            *) echo "completion_record outside allowlisted public examples path" >&2; exit 2 ;;
-          esac
-          test -f "$record"
+          RECORD_BASENAME="$record_basename" python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          name = os.environ['RECORD_BASENAME']
+          if not re.fullmatch(r'public-build-completion-[a-z0-9-]+\.json', name):
+              raise SystemExit('completion_record must be a simple allowlisted public-build completion-record basename')
+          path = Path('examples') / name
+          if path.parent != Path('examples') or not path.is_file():
+              raise SystemExit('completion_record must resolve to an existing file directly under examples/')
+          print(f'RELEASE_COMPLETION_RECORD={path}')
+          PY
+          record="examples/${record_basename}"
 
           python scripts/release_readiness_verify.py \
             "$record" \
