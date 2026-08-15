@@ -117,6 +117,27 @@ def test_optional_dependency_fails_explicitly_when_unavailable(monkeypatch: pyte
         adapter.collect_source_evidence()
 
 
+def test_real_runtime_contract_when_psutil_is_installed() -> None:
+    if adapter.psutil is None:
+        pytest.skip("optional psutil dependency not installed in core test lane")
+    record = adapter.build_acceptance_record(collected_at="2026-08-15T09:00:00Z")
+    assert record["acceptance_claims"]["real_psutil_runtime_exercised"] is True
+    for key in (
+        "identity_data_collected",
+        "network_data_collected",
+        "process_data_collected",
+        "mutation_performed",
+        "physical_hardware_health_proven",
+        "root_cause_proven",
+        "production_safe_to_infer",
+        "roadmap_complete",
+    ):
+        assert record["acceptance_claims"][key] is False
+    assert record["source_evidence_sha256"] == adapter.evidence_sha256(record["source_evidence"])
+    assert all(value is False for value in record["source_evidence"]["privacy"].values())
+    assert all(value is False for value in record["source_evidence"]["mutation"].values())
+
+
 def test_adapter_source_does_not_enumerate_sensitive_psutil_surfaces_or_execute() -> None:
     source = SCRIPT.read_text(encoding="utf-8")
     forbidden = (
