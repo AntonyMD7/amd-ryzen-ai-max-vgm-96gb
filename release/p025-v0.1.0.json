@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "release_id": "P025-V0.1.0",
+  "roadmap_id": "P-025",
+  "tag": "v0.1.0",
+  "title": "AMD Ryzen AI Max 96 GB VGM Community Toolkit v0.1.0",
+  "source_commit": "704f7bab429b1f67896b32bf90b99d3d0d9cd39c",
+  "completion_record": "examples/public-build-completion-p025-in-progress.json",
+  "notes_file": "RELEASE-NOTES-v0.1.0.md",
+  "expected_readiness_decision": "READY_FOR_GOVERNED_RELEASE_CREATION_REVIEW",
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "post_publish_exact_tag_verification_required": true,
+  "roadmap_completion_on_publish": false
+}
