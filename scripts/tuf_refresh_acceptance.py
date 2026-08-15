@@ -6,11 +6,12 @@ explicit root file, refreshes top-level metadata, downloads and verifies the
 Sigstore trusted_root.json target, and emits sanitized evidence. It performs
 network reads only and does not alter user devices or production systems.
 
-A successful run proves only that this exact client/tool/version completed the
-TUF workflow from the supplied bootstrap root at run time. It does not prove a
-historic multi-root rotation chain, future freshness, revocation awareness,
-resistance to every TUF attack, artifact semantic goodness, production
-readiness, or DAIS roadmap completion.
+A successful run proves only what this exact client/tool/version completed from
+the supplied bootstrap at run time. When the refreshed root advances beyond a
+historical bootstrap, the evidence may state that this exact authenticated root
+rotation path was exercised; it does not generalize that result to every TUF
+client, future refresh, revocation event, attack class, production environment,
+or DAIS roadmap completion.
 """
 
 from __future__ import annotations
@@ -132,12 +133,14 @@ def run_refresh(
     tlog_count = _positive_count(target_obj.get("tlogs"), "tlogs")
     tsa_count = _positive_count(target_obj.get("timestampAuthorities"), "timestampAuthorities")
 
+    historic_rotation = refreshed_root_version > expected_root_version
     return {
         "schema_version": "0.1",
         "evidence_type": "universal-evidence-tuf-refresh-supporting-acceptance",
         "tooling": {
             "client": "python-tuf",
             "client_version": importlib.metadata.version("tuf"),
+            "securesystemslib_version": importlib.metadata.version("securesystemslib"),
         },
         "bootstrap": {
             "root_version": bootstrap_obj["signed"]["version"],
@@ -149,7 +152,7 @@ def run_refresh(
             "target_base_url": target_base_url,
             "refreshed_root_version": refreshed_root_version,
             "authenticated_root_not_regressed": refreshed_root_version >= expected_root_version,
-            "historic_root_rotation_exercised": refreshed_root_version > expected_root_version,
+            "historic_root_rotation_exercised": historic_rotation,
             "top_level_refresh_succeeded": True,
         },
         "verified_target": {
@@ -169,7 +172,7 @@ def run_refresh(
             "credential_input_required": False,
         },
         "claims": {
-            "historic_multi_root_rotation_proven": False,
+            "all_historic_rotation_paths_proven": False,
             "future_trusted_root_freshness_proven": False,
             "future_revocation_awareness_proven": False,
             "all_tuf_attack_classes_exercised": False,
