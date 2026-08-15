@@ -68,9 +68,9 @@ def make_mutating_plan():
             "phase": "APPROVE",
             "description": "Record explicit approval.",
             "classification": "HUMAN_GATE",
-            "command_ref": null,
+            "command_ref": None,
             "expected_evidence": ["authorization reference"],
-            "timeout_seconds": null,
+            "timeout_seconds": None,
             "idempotency": "NOT_IDEMPOTENT"
         },
         {
