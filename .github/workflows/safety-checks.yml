@@ -28,6 +28,43 @@ jobs:
       - name: Validate all public-build foundation contracts
         run: python -m pytest -q
 
+      - name: SafeFix disposable sandbox acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+          printf 'acceptance only\n' > "$root/.safefix-sandbox"
+          printf 'before\n' > "$root/config.txt"
+          SAFEFIX_SANDBOX_ROOT="$root" python - <<'PY'
+          import hashlib
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, 'scripts')
+          from safefix_sandbox import apply_text_change, rollback
+
+          root = Path(os.environ['SAFEFIX_SANDBOX_ROOT'])
+          before = (root / 'config.txt').read_bytes()
+          digest = hashlib.sha256(before).hexdigest()
+          changed = apply_text_change(
+              root,
+              'config.txt',
+              'after\n',
+              transaction_id='ci-safefix-acceptance',
+              approval_present=True,
+              expected_before_sha256=digest,
+          )
+          assert changed['status'] == 'MUTATION_ATTESTED'
+          assert changed['production_safe_to_infer'] is False
+          restored = rollback(root, 'config.txt', transaction_id='ci-safefix-acceptance')
+          assert restored['status'] == 'ROLLBACK_ATTESTED'
+          assert (root / 'config.txt').read_bytes() == before
+          print('SAFEFIX_SANDBOX_ACCEPTANCE=PASS')
+          print('PRODUCTION_SAFE_TO_INFER=FALSE')
+          PY
+
       - name: Render example runbook without execution
         run: |
           python scripts/runbook_generator.py examples/automation-plan-readonly-v0.1.json --output /tmp/read-only-runbook.md
@@ -63,12 +100,14 @@ jobs:
             docs/COMMUNITY-SAFETY.md \
             docs/COMPATIBILITY.md \
             docs/PUBLIC-BUILD-FOUNDATIONS.md \
+            docs/SAFEFIX-SANDBOX-ACCEPTANCE.md \
             docs/SYSTEM-DOCTOR-AND-ACCESSIBLE-AI.md \
             docs/BEGINNER-TECH-RESCUE.md \
             docs/EVIDENCE-FIRST-RUNBOOKS.md \
             SECURITY.md \
             CONTRIBUTING.md \
             scripts/safefix_contract.py \
+            scripts/safefix_sandbox.py \
             scripts/local_ai_readiness.py \
             scripts/system_doctor.py \
             scripts/accessible_report.py \
