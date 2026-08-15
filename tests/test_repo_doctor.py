@@ -42,7 +42,7 @@ def test_heading_skip_and_empty_alt_are_review_findings(tmp_path):
     kinds = {item["kind"] for item in report["accessibility_findings"]}
     assert "heading_level_skip" in kinds
     assert "empty_image_alt_text" in kinds
-    assert any("does not establish wcag" in item.lower() for item in report["recommendations"])
+    assert any("accessibility" in item.lower() and "conformance" in item.lower() for item in report["recommendations"])
 
 
 def test_dangerous_and_mutating_patterns_are_flagged_not_executed(tmp_path):
