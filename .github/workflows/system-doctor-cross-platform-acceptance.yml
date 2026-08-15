@@ -1,0 +1,55 @@
+name: System Doctor cross-platform hosted acceptance
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  hosted-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            environment_class: GITHUB_HOSTED_UBUNTU_24_04
+            artifact_suffix: ubuntu-24.04
+          - runner: windows-2025
+            environment_class: GITHUB_HOSTED_WINDOWS_2025
+            artifact_suffix: windows-2025
+          - runner: macos-15
+            environment_class: GITHUB_HOSTED_MACOS_15
+            artifact_suffix: macos-15
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned schema validator
+        run: python -m pip install --disable-pip-version-check jsonschema==4.26.0
+
+      - name: Run bounded hosted acceptance
+        run: python scripts/system_doctor_hosted_acceptance.py --output-dir cross-platform-acceptance --environment-class "${{ matrix.environment_class }}"
+
+      - name: Enforce non-overclaim boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"read_only_contract": "PASS"' cross-platform-acceptance/acceptance.json
+          grep -q '"physical_hardware_validated": false' cross-platform-acceptance/acceptance.json
+          grep -q '"production_ready": false' cross-platform-acceptance/acceptance.json
+
+      - name: Upload sanitized hosted evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-doctor-${{ matrix.artifact_suffix }}-acceptance
+          path: cross-platform-acceptance/
+          if-no-files-found: error
+          retention-days: 14
