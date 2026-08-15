@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/local-ai-benchmark-v0.1.schema.json",
+  "title": "Local AI Benchmark Evidence v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "benchmark_id",
+    "observed_at_utc",
+    "producer",
+    "subject",
+    "software",
+    "workload",
+    "performance",
+    "energy",
+    "privacy",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "benchmark_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "observed_at_utc": {"type": "string", "format": "date-time"},
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "version", "source_revision"],
+      "properties": {
+        "tool": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "source_revision": {"type": "string", "minLength": 1}
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "architecture", "accelerator_class", "memory_bytes"],
+      "properties": {
+        "platform": {"type": "string", "minLength": 1},
+        "architecture": {"type": "string", "minLength": 1},
+        "accelerator_class": {"type": "string", "minLength": 1},
+        "memory_bytes": {"type": "integer", "minimum": 1},
+        "public_hardware_label": {"type": ["string", "null"], "maxLength": 200}
+      }
+    },
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "backend_version", "backend_revision", "driver_runtime"],
+      "properties": {
+        "backend": {"type": "string", "minLength": 1},
+        "backend_version": {"type": "string", "minLength": 1},
+        "backend_revision": {"type": "string", "minLength": 1},
+        "driver_runtime": {"type": "string", "minLength": 1}
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_revision",
+        "artifact_digest",
+        "quantization",
+        "task",
+        "prompt_tokens",
+        "generated_tokens",
+        "context_size",
+        "batch_size",
+        "repetitions",
+        "warmup_runs"
+      ],
+      "properties": {
+        "model_id": {"type": "string", "minLength": 1},
+        "model_revision": {"type": "string", "minLength": 1},
+        "artifact_digest": {"type": "string", "pattern": "^sha256:[0-9a-fA-F]{64}$"},
+        "quantization": {"type": "string", "minLength": 1},
+        "task": {"enum": ["prompt_processing", "generation", "combined", "embedding", "other"]},
+        "prompt_tokens": {"type": "integer", "minimum": 0},
+        "generated_tokens": {"type": "integer", "minimum": 0},
+        "context_size": {"type": "integer", "minimum": 1},
+        "batch_size": {"type": "integer", "minimum": 1},
+        "repetitions": {"type": "integer", "minimum": 1},
+        "warmup_runs": {"type": "integer", "minimum": 0}
+      }
+    },
+    "performance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens_per_second", "latency_seconds", "measurement_source"],
+      "properties": {
+        "tokens_per_second": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "latency_seconds": {"type": ["number", "null"], "minimum": 0},
+        "measurement_source": {"type": "string", "minLength": 1},
+        "raw_evidence_ref": {"type": ["string", "null"], "maxLength": 500}
+      },
+      "anyOf": [
+        {"required": ["tokens_per_second"], "properties": {"tokens_per_second": {"type": "number", "exclusiveMinimum": 0}}},
+        {"required": ["latency_seconds"], "properties": {"latency_seconds": {"type": "number", "minimum": 0}}}
+      ]
+    },
+    "energy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "measurement_method", "energy_kwh"],
+      "properties": {
+        "status": {"enum": ["NOT_MEASURED", "DIRECT_METERED", "SOFTWARE_ESTIMATED", "EXTERNAL_REPORTED"]},
+        "measurement_method": {"type": ["string", "null"], "maxLength": 240},
+        "energy_kwh": {"type": ["number", "null"], "minimum": 0},
+        "method_version": {"type": ["string", "null"], "maxLength": 120},
+        "evidence_ref": {"type": ["string", "null"], "maxLength": 500}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "NOT_MEASURED"}}},
+          "then": {"properties": {"energy_kwh": {"type": "null"}}},
+          "else": {
+            "required": ["energy_kwh", "measurement_method"],
+            "properties": {
+              "energy_kwh": {"type": "number", "minimum": 0},
+              "measurement_method": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      ]
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["credentials_included", "username_included", "network_address_included", "prompt_content_included"],
+      "properties": {
+        "credentials_included": {"const": false},
+        "username_included": {"const": false},
+        "network_address_included": {"const": false},
+        "prompt_content_included": {"const": false}
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
