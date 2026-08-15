@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dais/accessible-ai-manual-session-v0.1.schema.json",
+  "title": "DAIS Accessible AI manual assistive-technology session v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_type",
+    "session_mode",
+    "subject",
+    "environment",
+    "tasks",
+    "privacy",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "evidence_type": {"const": "accessible-ai-manual-at-session"},
+    "session_mode": {"enum": ["SYNTHETIC_PROTOCOL_CHECK", "MANUAL_ASSISTIVE_TECH"]},
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_kind", "artifact_ref", "sha256"],
+      "properties": {
+        "artifact_kind": {"enum": ["HTML", "WEB_APP", "CLI_TUI", "DOCUMENT", "OTHER"]},
+        "artifact_ref": {"type": "string", "minLength": 1, "maxLength": 240},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os_family",
+        "os_version",
+        "browser_family",
+        "browser_version",
+        "assistive_technology_name",
+        "assistive_technology_version",
+        "input_method"
+      ],
+      "properties": {
+        "os_family": {"type": "string", "minLength": 1, "maxLength": 80},
+        "os_version": {"type": "string", "minLength": 1, "maxLength": 80},
+        "browser_family": {"type": "string", "minLength": 1, "maxLength": 80},
+        "browser_version": {"type": "string", "minLength": 1, "maxLength": 80},
+        "assistive_technology_name": {"type": "string", "minLength": 1, "maxLength": 120},
+        "assistive_technology_version": {"type": "string", "minLength": 1, "maxLength": 80},
+        "input_method": {
+          "enum": [
+            "KEYBOARD_ONLY",
+            "KEYBOARD_AND_SCREEN_READER_COMMANDS",
+            "OTHER_REVIEWED_METHOD"
+          ]
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 16,
+      "items": {"$ref": "#/$defs/task"}
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "people_involved",
+        "consent_prerequisite_satisfied",
+        "participant_identity_stored",
+        "participant_contact_stored",
+        "credential_values_stored",
+        "private_content_stored",
+        "raw_audio_or_screen_recording_stored"
+      ],
+      "properties": {
+        "people_involved": {"type": "boolean"},
+        "consent_prerequisite_satisfied": {"type": "boolean"},
+        "participant_identity_stored": {"const": false},
+        "participant_contact_stored": {"const": false},
+        "credential_values_stored": {"const": false},
+        "private_content_stored": {"const": false},
+        "raw_audio_or_screen_recording_stored": {"const": false}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wcag_conformance",
+        "all_accessibility_issues_found",
+        "all_users_supported",
+        "cross_at_compatibility",
+        "production_ready",
+        "roadmap_complete"
+      ],
+      "properties": {
+        "wcag_conformance": {"const": false},
+        "all_accessibility_issues_found": {"const": false},
+        "all_users_supported": {"const": false},
+        "cross_at_compatibility": {"const": false},
+        "production_ready": {"const": false},
+        "roadmap_complete": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "status", "notes"],
+      "properties": {
+        "task_id": {
+          "enum": [
+            "skip_navigation",
+            "landmark_and_heading_navigation",
+            "interactive_control_operation",
+            "status_and_safety_announcement",
+            "logical_reading_order",
+            "focus_visibility_and_location",
+            "zoom_reflow_400",
+            "reduced_motion",
+            "language_semantics",
+            "error_and_issue_discoverability"
+          ]
+        },
+        "status": {"enum": ["PASS", "FAIL", "BLOCKED", "NOT_RUN", "NOT_APPLICABLE"]},
+        "notes": {"type": "string", "maxLength": 800},
+        "evidence_ref": {"type": "string", "maxLength": 240}
+      }
+    }
+  }
+}

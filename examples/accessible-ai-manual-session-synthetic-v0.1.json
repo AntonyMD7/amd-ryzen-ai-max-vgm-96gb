@@ -1,0 +1,48 @@
+{
+  "schema_version": "0.1",
+  "evidence_type": "accessible-ai-manual-at-session",
+  "session_mode": "SYNTHETIC_PROTOCOL_CHECK",
+  "subject": {
+    "artifact_kind": "HTML",
+    "artifact_ref": "synthetic/manual-at-session-fixture",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "environment": {
+    "os_family": "synthetic",
+    "os_version": "not-run",
+    "browser_family": "synthetic",
+    "browser_version": "not-run",
+    "assistive_technology_name": "synthetic protocol fixture",
+    "assistive_technology_version": "not-run",
+    "input_method": "KEYBOARD_AND_SCREEN_READER_COMMANDS"
+  },
+  "tasks": [
+    {"task_id": "skip_navigation", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."},
+    {"task_id": "landmark_and_heading_navigation", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."},
+    {"task_id": "interactive_control_operation", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."},
+    {"task_id": "status_and_safety_announcement", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."},
+    {"task_id": "logical_reading_order", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."},
+    {"task_id": "focus_visibility_and_location", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."},
+    {"task_id": "zoom_reflow_400", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."},
+    {"task_id": "reduced_motion", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."},
+    {"task_id": "language_semantics", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."},
+    {"task_id": "error_and_issue_discoverability", "status": "NOT_RUN", "notes": "Synthetic schema fixture only."}
+  ],
+  "privacy": {
+    "people_involved": false,
+    "consent_prerequisite_satisfied": false,
+    "participant_identity_stored": false,
+    "participant_contact_stored": false,
+    "credential_values_stored": false,
+    "private_content_stored": false,
+    "raw_audio_or_screen_recording_stored": false
+  },
+  "claims": {
+    "wcag_conformance": false,
+    "all_accessibility_issues_found": false,
+    "all_users_supported": false,
+    "cross_at_compatibility": false,
+    "production_ready": false,
+    "roadmap_complete": false
+  }
+}
