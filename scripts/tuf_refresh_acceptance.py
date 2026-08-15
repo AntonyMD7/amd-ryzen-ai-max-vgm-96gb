@@ -20,12 +20,16 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 DEFAULT_METADATA_URL = "https://tuf-repo-cdn.sigstore.dev/"
 DEFAULT_TARGET_URL = "https://tuf-repo-cdn.sigstore.dev/targets/"
 DEFAULT_TARGET = "trusted_root.json"
+TRUSTED_ROOT_MEDIA_TYPE = re.compile(
+    r"^application/vnd\.dev\.sigstore\.trustedroot\+json;version=[0-9]+(?:\.[0-9]+)*$"
+)
 
 
 class TufRefreshAcceptanceError(ValueError):
@@ -126,8 +130,10 @@ def run_refresh(
     target_obj = _load_json_bytes(target_bytes, target_name)
 
     media_type = target_obj.get("mediaType")
-    if not isinstance(media_type, str) or not media_type.startswith("application/vnd.dev.sigstore.trustedroot.v"):
-        raise TufRefreshAcceptanceError("verified target is not a supported Sigstore TrustedRoot JSON media type")
+    if not isinstance(media_type, str) or not TRUSTED_ROOT_MEDIA_TYPE.fullmatch(media_type):
+        raise TufRefreshAcceptanceError(
+            f"verified target has unexpected Sigstore TrustedRoot media type: {media_type!r}"
+        )
 
     ca_count = _positive_count(target_obj.get("certificateAuthorities"), "certificateAuthorities")
     tlog_count = _positive_count(target_obj.get("tlogs"), "tlogs")
