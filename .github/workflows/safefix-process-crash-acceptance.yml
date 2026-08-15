@@ -1,0 +1,88 @@
+name: SafeFix abrupt-process recovery acceptance
+
+on:
+  push:
+    paths:
+      - 'scripts/safefix_sandbox.py'
+      - 'scripts/safefix_process_crash_acceptance.py'
+      - 'tests/test_safefix_process_crash_acceptance.py'
+      - 'docs/SAFEFIX-PROCESS-CRASH-ACCEPTANCE.md'
+      - '.github/workflows/safefix-process-crash-acceptance.yml'
+  pull_request:
+    paths:
+      - 'scripts/safefix_sandbox.py'
+      - 'scripts/safefix_process_crash_acceptance.py'
+      - 'tests/test_safefix_process_crash_acceptance.py'
+      - 'docs/SAFEFIX-PROCESS-CRASH-ACCEPTANCE.md'
+      - '.github/workflows/safefix-process-crash-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  process-crash-recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependency
+        run: python -m pip install --disable-pip-version-check 'pytest>=8,<9'
+
+      - name: Compile SafeFix crash acceptance sources
+        run: >-
+          python -m compileall -q
+          scripts/safefix_sandbox.py
+          scripts/safefix_process_crash_acceptance.py
+          tests/test_safefix_process_crash_acceptance.py
+
+      - name: Run abrupt-process recovery contract tests
+        run: python -m pytest -q tests/test_safefix_process_crash_acceptance.py tests/test_safefix_durability.py tests/test_safefix_sandbox.py
+
+      - name: Run two real abrupt child-process exits in disposable marked sandboxes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/safefix_process_crash_acceptance.py --output /tmp/safefix-process-crash.json > /tmp/safefix-process-crash.stdout.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path('/tmp/safefix-process-crash.json').read_text(encoding='utf-8'))
+          cases = {item['case']: item for item in data['cases']}
+
+          assert cases['before-target-write']['child_exit_code'] == 70
+          assert cases['before-target-write']['journal_phase_after_crash'] == 'PREPARED'
+          assert cases['before-target-write']['observed_state_after_crash'] == 'BEFORE_STATE_PRESENT'
+          assert cases['before-target-write']['rollback_journal_phase'] == 'ROLLED_BACK'
+
+          assert cases['after-target-write-before-commit']['child_exit_code'] == 71
+          assert cases['after-target-write-before-commit']['journal_phase_after_crash'] == 'PREPARED'
+          assert cases['after-target-write-before-commit']['observed_state_after_crash'] == 'DESIRED_STATE_PRESENT'
+          assert cases['after-target-write-before-commit']['rollback_journal_phase'] == 'ROLLED_BACK'
+
+          assert data['scope']['abrupt_process_termination_exercised'] is True
+          assert data['scope']['user_owned_target_mutated'] is False
+          assert data['scope']['production_target_mutated'] is False
+          assert all(value is False for value in data['claims'].values())
+
+          print('ABRUPT_PROCESS_TERMINATION_ACCEPTANCE=PASS')
+          print('PREPARED_BEFORE_STATE_RECOVERY=PASS')
+          print('PREPARED_DESIRED_STATE_RECOVERY=PASS')
+          print('POWER_LOSS_ATOMICITY_CLAIMED=FALSE')
+          print('PRODUCTION_SAFETY_CLAIMED=FALSE')
+          print('ROADMAP_COMPLETION_CLAIMED=FALSE')
+          PY
+
+      - name: Upload sanitized SafeFix crash evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: safefix-process-crash-supporting-acceptance
+          path: /tmp/safefix-process-crash.json
+          if-no-files-found: error
+          retention-days: 14
