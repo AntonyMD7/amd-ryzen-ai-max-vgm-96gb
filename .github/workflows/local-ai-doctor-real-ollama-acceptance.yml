@@ -1,0 +1,179 @@
+name: Local AI Doctor real Ollama acceptance
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  real-ollama-bounded-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OLLAMA_VERSION: 0.32.5
+      OLLAMA_HOST: 127.0.0.1:11434
+      ACCEPTANCE_MODEL: smollm:135m
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned Ollama release on ephemeral hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/install.sh" \
+            -o /tmp/ollama-install.sh
+          printf '%s  %s\n' \
+            '25f64b810b947145095956533e1bdf56eacea2673c55a7e586be4515fc882c9f' \
+            '/tmp/ollama-install.sh' > /tmp/ollama-install.sha256
+          # SHA-256 above is the digest published on the official Ollama
+          # v0.32.5 GitHub release asset. Fail closed before script execution.
+          sha256sum --check /tmp/ollama-install.sha256
+          OLLAMA_VERSION="$OLLAMA_VERSION" sh /tmp/ollama-install.sh
+          ollama --version | tee /tmp/ollama-cli-version.txt
+
+      - name: Start loopback-only Ollama
+        shell: bash
+        run: |
+          set -euo pipefail
+          OLLAMA_HOST="$OLLAMA_HOST" ollama serve >/tmp/ollama-serve.log 2>&1 &
+          echo $! > /tmp/ollama-serve.pid
+          for i in {1..60}; do
+            if curl --fail --silent --show-error http://127.0.0.1:11434/api/version > /tmp/ollama-api-version.json; then
+              cat /tmp/ollama-api-version.json
+              python - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/ollama-api-version.json', encoding='utf-8'))
+          assert data.get('version') == os.environ['OLLAMA_VERSION'], data
+          print('PINNED_OLLAMA_API_VERSION=PASS')
+          PY
+              exit 0
+            fi
+            sleep 0.5
+          done
+          cat /tmp/ollama-serve.log >&2 || true
+          exit 1
+
+      - name: Pull one small public acceptance model into ephemeral runner only
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Model download occurs only in this disposable GitHub-hosted runner.
+          # The Local AI Doctor probe itself retains model_download_allowed=false.
+          ollama pull "$ACCEPTANCE_MODEL"
+          curl --fail --silent --show-error http://127.0.0.1:11434/api/tags > /tmp/ollama-tags.json
+          python - <<'PY'
+          import json, os
+          tags = json.load(open('/tmp/ollama-tags.json', encoding='utf-8'))
+          expected = os.environ['ACCEPTANCE_MODEL']
+          matches = [m for m in tags.get('models', []) if (m.get('model') or m.get('name')) == expected]
+          assert len(matches) == 1, (expected, matches)
+          item = matches[0]
+          digest = item.get('digest')
+          size = item.get('size')
+          assert isinstance(digest, str) and len(digest) >= 32
+          assert isinstance(size, int) and 1_000_000 <= size <= 250_000_000
+          print('EXACT_MODEL_TAG_PRESENT=TRUE')
+          print('MODEL_DIGEST_RETAINED_BY_PROBE=TRUE')
+          print(f'MODEL_SIZE_BYTES={size}')
+          PY
+
+      - name: Run read-only API acceptance before inference
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p local-ai-doctor-evidence
+          python scripts/ollama_bounded_acceptance.py \
+            --base-url http://127.0.0.1:11434 \
+            --model "$ACCEPTANCE_MODEL" \
+            > local-ai-doctor-evidence/read-only.json
+          python - <<'PY'
+          import json
+          p='local-ai-doctor-evidence/read-only.json'
+          data=json.load(open(p, encoding='utf-8'))
+          assert data['transport'] == 'LOOPBACK_HTTP_ONLY'
+          assert data['requested_model']['present'] is True
+          assert data['inference']['performed'] is False
+          assert data['safety']['model_download_allowed'] is False
+          assert data['safety']['generated_text_retained'] is False
+          assert data['claims']['production_ready'] is False
+          print('READ_ONLY_OLLAMA_ACCEPTANCE=PASS')
+          PY
+
+      - name: Run one bounded exact-model inference acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ollama_bounded_acceptance.py \
+            --base-url http://127.0.0.1:11434 \
+            --model "$ACCEPTANCE_MODEL" \
+            --allow-inference \
+            > local-ai-doctor-evidence/inference.json
+          python - <<'PY'
+          import json
+          p='local-ai-doctor-evidence/inference.json'
+          data=json.load(open(p, encoding='utf-8'))
+          assert data['transport'] == 'LOOPBACK_HTTP_ONLY'
+          assert data['requested_model']['present'] is True
+          assert data['inference']['requested'] is True
+          assert data['inference']['performed'] is True
+          assert data['inference']['response_text_retained'] is False
+          assert isinstance(data['inference']['response_sha256'], str)
+          assert len(data['inference']['response_sha256']) == 64
+          assert data['claims']['exact_model_inference_exercised'] is True
+          assert data['claims']['accelerator_support_verified'] is False
+          assert data['claims']['model_quality_verified'] is False
+          assert data['claims']['performance_characterized'] is False
+          assert data['claims']['production_ready'] is False
+          print('BOUNDED_EXACT_MODEL_INFERENCE=PASS')
+          print('GENERATED_TEXT_RETAINED=FALSE')
+          print('MODEL_QUALITY_CLAIMED=FALSE')
+          print('PERFORMANCE_CHARACTERIZED=FALSE')
+          print('PRODUCTION_READY_CLAIMED=FALSE')
+          PY
+
+      - name: Retain sanitized runtime and model evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p local-ai-doctor-evidence
+          cp /tmp/ollama-api-version.json local-ai-doctor-evidence/api-version.json 2>/dev/null || true
+          cp /tmp/ollama-tags.json local-ai-doctor-evidence/tags.json 2>/dev/null || true
+          python - <<'PY'
+          from pathlib import Path
+          log = Path('/tmp/ollama-serve.log')
+          if log.exists():
+              text = log.read_text(encoding='utf-8', errors='replace')
+              # Do not publish arbitrary runtime logs; retain only a bounded
+              # boolean marker that the server produced a log file.
+              Path('local-ai-doctor-evidence/server-log-summary.txt').write_text(
+                  f'OLLAMA_SERVER_LOG_PRESENT={bool(text.strip())}\nRAW_SERVER_LOG_RETAINED=FALSE\n',
+                  encoding='utf-8',
+              )
+          PY
+
+      - name: Stop ephemeral Ollama server
+        if: always()
+        shell: bash
+        run: |
+          if test -f /tmp/ollama-serve.pid; then
+            kill "$(cat /tmp/ollama-serve.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload sanitized Local AI Doctor acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-ai-doctor-real-ollama-evidence
+          path: local-ai-doctor-evidence/
+          if-no-files-found: warn
+          retention-days: 14
