@@ -1,0 +1,164 @@
+name: Universal Evidence signature acceptance
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  cosign-blob-verification:
+    runs-on: ubuntu-24.04
+    env:
+      # Public, fixed fixture password for an ephemeral CI-only Cosign key.
+      # This is not a production credential and the private key is destroyed.
+      COSIGN_PASSWORD: dais-disposable-ci-fixture-only
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v3.0.6'
+
+      - name: Create disposable Cosign-native keypair
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p signature-acceptance
+          (
+            cd signature-acceptance
+            cosign generate-key-pair --output-key-prefix ephemeral
+          )
+          test -s signature-acceptance/ephemeral.key
+          test -s signature-acceptance/ephemeral.pub
+          chmod 600 signature-acceptance/ephemeral.key
+          cosign version
+          echo 'KEY_SCOPE=DISPOSABLE_CI_FIXTURE_ONLY'
+          echo 'PRODUCTION_CREDENTIAL_USED=FALSE'
+
+      - name: Sign exact Universal Evidence fixture without identity or transparency claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp examples/universal-evidence-readonly-example.json signature-acceptance/evidence.json
+          sha256sum signature-acceptance/evidence.json > signature-acceptance/evidence.sha256
+          cosign sign-blob \
+            --yes \
+            --use-signing-config=false \
+            --key signature-acceptance/ephemeral.key \
+            --bundle signature-acceptance/evidence.sigstore.json \
+            signature-acceptance/evidence.json \
+            > signature-acceptance/signature.txt
+          test -s signature-acceptance/evidence.sigstore.json
+          touch signature-acceptance/sign.ok
+          echo 'SIGNED_FIXTURE_GENERATED=PASS'
+          echo 'IDENTITY_ATTESTATION_CLAIMED=FALSE'
+          echo 'TRANSPARENCY_LOG_INCLUSION_CLAIMED=FALSE'
+
+      - name: Verify exact bytes with public key and bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign verify-blob \
+            --key signature-acceptance/ephemeral.pub \
+            --bundle signature-acceptance/evidence.sigstore.json \
+            signature-acceptance/evidence.json \
+            > signature-acceptance/verify-exact.txt
+          touch signature-acceptance/verify-exact.ok
+          echo 'EXACT_BLOB_SIGNATURE_VERIFICATION=PASS'
+
+      - name: Prove tampered bytes fail verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp signature-acceptance/evidence.json signature-acceptance/evidence-tampered.json
+          printf '\n' >> signature-acceptance/evidence-tampered.json
+          if cosign verify-blob \
+            --key signature-acceptance/ephemeral.pub \
+            --bundle signature-acceptance/evidence.sigstore.json \
+            signature-acceptance/evidence-tampered.json \
+            > signature-acceptance/verify-tampered.txt 2>&1; then
+            echo 'Tampered blob unexpectedly verified.' >&2
+            exit 1
+          fi
+          touch signature-acceptance/tamper-rejected.ok
+          echo 'TAMPER_REJECTION=PASS'
+
+      - name: Remove private key before evidence upload
+        if: always()
+        shell: bash
+        run: |
+          rm -f signature-acceptance/ephemeral.key
+          test ! -e signature-acceptance/ephemeral.key
+          echo 'PRIVATE_KEY_RETAINED=FALSE'
+
+      - name: Write fail-honest claim-boundary record
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          out = Path('signature-acceptance')
+          exact_verified = (out / 'verify-exact.ok').exists()
+          tamper_rejected = (out / 'tamper-rejected.ok').exists()
+          signed_fixture = (out / 'sign.ok').exists()
+          record = {
+              'schema_version': '0.1',
+              'evidence_type': 'universal-evidence-signature-supporting-acceptance',
+              'tool': {'name': 'cosign', 'version_pin': 'v3.0.6'},
+              'fixture': 'examples/universal-evidence-readonly-example.json',
+              'verification_scope': 'DISPOSABLE_LOCAL_KEY_EXACT_BLOB_ONLY',
+              'status': 'PASS' if exact_verified and tamper_rejected else 'INCOMPLETE_OR_FAILED',
+              'claims': {
+                  'signed_fixture_generated': signed_fixture,
+                  'exact_blob_signature_verification': exact_verified,
+                  'tamper_rejection_exercised': tamper_rejected,
+                  'signer_identity_verified': False,
+                  'transparency_log_inclusion_verified': False,
+                  'trusted_timestamp_verified': False,
+                  'slsa_conformance_verified': False,
+                  'statement_semantic_truth_verified': False,
+                  'production_key_management_validated': False,
+              },
+              'privacy': {
+                  'credential_values_retained': False,
+                  'private_key_retained': False,
+                  'user_data_used': False,
+              },
+          }
+          (out / 'claim-boundary.json').write_text(json.dumps(record, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          if record['status'] == 'PASS':
+              print('SIGNATURE_SUPPORTING_EVIDENCE_RECORD=PASS')
+          else:
+              print('SIGNATURE_SUPPORTING_EVIDENCE_RECORD=INCOMPLETE_OR_FAILED')
+          PY
+
+      - name: Enforce final claim-boundary success
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"status": "PASS"' signature-acceptance/claim-boundary.json
+          grep -q '"signer_identity_verified": false' signature-acceptance/claim-boundary.json
+          grep -q '"statement_semantic_truth_verified": false' signature-acceptance/claim-boundary.json
+
+      - name: Upload sanitized signature evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal-evidence-signature-supporting-acceptance
+          path: |
+            signature-acceptance/evidence.json
+            signature-acceptance/evidence.sha256
+            signature-acceptance/evidence.sigstore.json
+            signature-acceptance/ephemeral.pub
+            signature-acceptance/signature.txt
+            signature-acceptance/verify-exact.txt
+            signature-acceptance/verify-tampered.txt
+            signature-acceptance/claim-boundary.json
+          if-no-files-found: error
+          retention-days: 14
