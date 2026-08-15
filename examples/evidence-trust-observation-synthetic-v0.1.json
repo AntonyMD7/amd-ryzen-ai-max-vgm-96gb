@@ -1,0 +1,12 @@
+{
+  "artifact_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "cryptographic_signature_verified": true,
+  "certificate_identity": "builder@example.invalid",
+  "certificate_oidc_issuer": "https://issuer.example.invalid",
+  "transparency_verified": true,
+  "timestamp_verified": true,
+  "timestamp_source": "SIGSTORE_TSA",
+  "provenance_verified": true,
+  "builder_id": "https://example.invalid/builders/hosted-ci",
+  "verifier": "SYNTHETIC_FIXTURE_NOT_A_REAL_VERIFIER"
+}
