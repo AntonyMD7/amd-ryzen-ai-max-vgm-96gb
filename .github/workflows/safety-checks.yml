@@ -65,6 +65,27 @@ jobs:
           print('PRODUCTION_SAFE_TO_INFER=FALSE')
           PY
 
+      - name: Local AI Doctor synthetic integration acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/local_ai_doctor.py examples/local-ai-doctor-synthetic.json > /tmp/local-ai-doctor.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path('/tmp/local-ai-doctor.json').read_text(encoding='utf-8'))
+          assert data['doctor']['mode'] == 'PLAN_ONLY'
+          assert data['status'] == 'EXACT_BACKEND_WORKLOAD_ACCEPTANCE_REQUIRED'
+          assert data['memory_prefilter']['fit_status'] == 'PREFILTER_FIT_REQUIRES_BACKEND_VALIDATION'
+          assert data['architecture_prefilter']['recommended_lane'] == 'LOCAL_ONLY_REQUIRED'
+          assert all(value is False for value in data['claims'].values())
+          assert all(value is False for value in data['safety'].values())
+          print('LOCAL_AI_DOCTOR_SYNTHETIC_ACCEPTANCE=PASS')
+          print('MODEL_RUNNABLE_CLAIMED=FALSE')
+          print('PRODUCTION_READY_CLAIMED=FALSE')
+          PY
+
       - name: Render example runbook without execution
         run: |
           python scripts/runbook_generator.py examples/automation-plan-readonly-v0.1.json --output /tmp/read-only-runbook.md
@@ -101,6 +122,7 @@ jobs:
             docs/COMPATIBILITY.md \
             docs/PUBLIC-BUILD-FOUNDATIONS.md \
             docs/SAFEFIX-SANDBOX-ACCEPTANCE.md \
+            docs/LOCAL-AI-DOCTOR-ORCHESTRATION.md \
             docs/SYSTEM-DOCTOR-AND-ACCESSIBLE-AI.md \
             docs/BEGINNER-TECH-RESCUE.md \
             docs/EVIDENCE-FIRST-RUNBOOKS.md \
@@ -109,6 +131,7 @@ jobs:
             scripts/safefix_contract.py \
             scripts/safefix_sandbox.py \
             scripts/local_ai_readiness.py \
+            scripts/local_ai_doctor.py \
             scripts/system_doctor.py \
             scripts/accessible_report.py \
             scripts/safe_command_explainer.py \
@@ -119,7 +142,8 @@ jobs:
             schemas/hardware-compatibility-report-v0.1.schema.json \
             schemas/automation-plan-v0.1.schema.json \
             examples/universal-evidence-readonly-example.json \
-            examples/automation-plan-readonly-v0.1.json; do
+            examples/automation-plan-readonly-v0.1.json \
+            examples/local-ai-doctor-synthetic.json; do
               test -s "$f" || { echo "Missing required file: $f" >&2; exit 1; }
           done
 
