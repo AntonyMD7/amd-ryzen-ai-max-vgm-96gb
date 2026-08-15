@@ -86,6 +86,27 @@ jobs:
           print('PRODUCTION_READY_CLAIMED=FALSE')
           PY
 
+      - name: Hardware Compatibility Commons synthetic public-intake acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/hardware_compatibility_intake.py examples/hardware-compatibility-synthetic-v0.2.json > /tmp/hcc-intake.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path('/tmp/hcc-intake.json').read_text(encoding='utf-8'))
+          assert data['status'] == 'ELIGIBLE_FOR_PUBLIC_REVIEW_NOT_VERIFIED'
+          assert data['schema_validation'] == 'PASS'
+          assert data['privacy_prefilter'] == 'PASS'
+          assert data['semantic_claim_check'] == 'PASS'
+          assert data['compatibility_verified_by_intake'] is False
+          assert data['human_review_completed_by_intake'] is False
+          assert data['safe_to_auto_apply'] is False
+          print('HCC_PUBLIC_INTAKE_ACCEPTANCE=PASS')
+          print('COMPATIBILITY_VERIFIED_BY_INTAKE=FALSE')
+          PY
+
       - name: Render example runbook without execution
         run: |
           python scripts/runbook_generator.py examples/automation-plan-readonly-v0.1.json --output /tmp/read-only-runbook.md
@@ -123,6 +144,7 @@ jobs:
             docs/PUBLIC-BUILD-FOUNDATIONS.md \
             docs/SAFEFIX-SANDBOX-ACCEPTANCE.md \
             docs/LOCAL-AI-DOCTOR-ORCHESTRATION.md \
+            docs/HARDWARE-COMPATIBILITY-COMMONS-INTAKE.md \
             docs/SYSTEM-DOCTOR-AND-ACCESSIBLE-AI.md \
             docs/BEGINNER-TECH-RESCUE.md \
             docs/EVIDENCE-FIRST-RUNBOOKS.md \
@@ -132,6 +154,7 @@ jobs:
             scripts/safefix_sandbox.py \
             scripts/local_ai_readiness.py \
             scripts/local_ai_doctor.py \
+            scripts/hardware_compatibility_intake.py \
             scripts/system_doctor.py \
             scripts/accessible_report.py \
             scripts/safe_command_explainer.py \
@@ -140,10 +163,12 @@ jobs:
             scripts/runbook_generator.py \
             schemas/universal-evidence-v0.1.schema.json \
             schemas/hardware-compatibility-report-v0.1.schema.json \
+            schemas/hardware-compatibility-report-v0.2.schema.json \
             schemas/automation-plan-v0.1.schema.json \
             examples/universal-evidence-readonly-example.json \
             examples/automation-plan-readonly-v0.1.json \
-            examples/local-ai-doctor-synthetic.json; do
+            examples/local-ai-doctor-synthetic.json \
+            examples/hardware-compatibility-synthetic-v0.2.json; do
               test -s "$f" || { echo "Missing required file: $f" >&2; exit 1; }
           done
 
