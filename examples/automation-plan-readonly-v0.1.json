@@ -2,7 +2,7 @@
   "schema_version": "0.1",
   "plan_id": "readonly-system-health-001",
   "title": "Read-Only System Health Evidence Runbook",
-  "roadmap_ids": ["P-020", "P-213"],
+  "roadmap_ids": ["P-213"],
   "mode": "READ_ONLY",
   "scope": {
     "subject": "example-local-system",
