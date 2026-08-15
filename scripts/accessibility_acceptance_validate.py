@@ -22,7 +22,7 @@ SENSITIVE_PATTERNS = (
     re.compile(r"\b(?:password|passwd|secret|api[_ -]?key|bearer)\s*[:=]\s*\S+", re.I),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----", re.I),
     re.compile(r"\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{20,})\b"),
-    re.compile(r"\b[A-Z]:\\Users\\[^\\\s]+", re.I),
+    re.compile(r"\b[A-Z]:\\+Users\\+[^\\\s]+", re.I),
     re.compile(r"/home/[^/\s]+", re.I),
 )
 
