@@ -196,7 +196,7 @@ def _read_manifest(recovery_root: Path) -> dict[str, Any]:
         record = json.loads(_read_regular_file(path).decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SandboxSafeFixError("recovery transaction manifest is invalid") from exc
-    if record.get("schema_version") != "0.4":
+    if record.get("schema_version") not in {"0.3", "0.4"}:
         raise SandboxSafeFixError("unsupported recovery transaction manifest")
     return record
 
