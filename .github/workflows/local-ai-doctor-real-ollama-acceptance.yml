@@ -29,13 +29,13 @@ jobs:
         run: |
           set -euo pipefail
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
-            https://ollama.com/install.sh -o /tmp/ollama-install.sh
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/install.sh" \
+            -o /tmp/ollama-install.sh
           printf '%s  %s\n' \
-            'c7c84e1625e0315791fbb3f917fdaf3bd3a8fbf491e6754fb0c7e19630e54ac6' \
+            '25f64b810b947145095956533e1bdf56eacea2673c55a7e586be4515fc882c9f' \
             '/tmp/ollama-install.sh' > /tmp/ollama-install.sha256
-          # The expected digest is deliberately checked before execution. If
-          # Ollama republishes install.sh, this gate fails closed and requires
-          # explicit source review rather than silently running changed code.
+          # SHA-256 above is the digest published on the official Ollama
+          # v0.32.5 GitHub release asset. Fail closed before script execution.
           sha256sum --check /tmp/ollama-install.sha256
           OLLAMA_VERSION="$OLLAMA_VERSION" sh /tmp/ollama-install.sh
           ollama --version | tee /tmp/ollama-cli-version.txt
@@ -49,6 +49,12 @@ jobs:
           for i in {1..60}; do
             if curl --fail --silent --show-error http://127.0.0.1:11434/api/version > /tmp/ollama-api-version.json; then
               cat /tmp/ollama-api-version.json
+              python - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/ollama-api-version.json', encoding='utf-8'))
+          assert data.get('version') == os.environ['OLLAMA_VERSION'], data
+          print('PINNED_OLLAMA_API_VERSION=PASS')
+          PY
               exit 0
             fi
             sleep 0.5
@@ -139,6 +145,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p local-ai-doctor-evidence
           cp /tmp/ollama-api-version.json local-ai-doctor-evidence/api-version.json 2>/dev/null || true
           cp /tmp/ollama-tags.json local-ai-doctor-evidence/tags.json 2>/dev/null || true
           python - <<'PY'
