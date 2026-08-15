@@ -42,9 +42,12 @@ def test_reviewed_linuxhw_derived_fact_is_only_public_review_candidate() -> None
 def test_external_failing_status_is_never_promoted_to_verified_failure() -> None:
     payload = load(LINUXHW)
     payload["observation"]["source_status"] = "COMMUNITY_FAILING"
-    report, _ = adapter.adapt_external_observation(payload)
+    report, intake = adapter.adapt_external_observation(payload)
     assert report["observation"]["status"] == "COMMUNITY_REPORTED"
-    assert "VERIFIED_FAILING" not in json.dumps(report)
+    assert report["observation"]["reproduction_runs"] == 0
+    assert report["evidence"]["method"] == "COMMUNITY_REPORT"
+    assert intake["compatibility_verified_by_intake"] is False
+    assert intake["human_review_completed_by_intake"] is False
 
 
 def test_external_unknown_remains_unknown() -> None:
