@@ -22,7 +22,10 @@ def test_p025_v010_completion_record_satisfies_canonical_contract():
     assert report["blocking_gates"] == []
     assert report["readiness"] == "COMPLETE_CONTRACT_SATISFIED"
     assert report["completion_contract_satisfied"] is True
-    assert report["ready_for_canonical_completion_review"] is True
+    # READY_FOR_CANONICAL_COMPLETION_REVIEW is the pre-completion state.
+    # Once the explicit COMPLETE record satisfies the contract, the auditor
+    # transitions to the terminal COMPLETE_CONTRACT_SATISFIED state instead.
+    assert report["ready_for_canonical_completion_review"] is False
     assert record["completion_record"]["version"] == "0.1.0"
     assert record["completion_record"]["release_or_tag"] == "v0.1.0"
     assert record["completion_record"]["handover"] == "docs/P025-COMPLETION-RECORD-v0.1.0.md"
