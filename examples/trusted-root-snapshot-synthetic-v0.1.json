@@ -1,0 +1,37 @@
+{
+  "schema_version": "0.1",
+  "snapshot_id": "sigstore-public-good-synthetic-2026-08-15",
+  "source": {
+    "ecosystem": "SIGSTORE_PUBLIC_GOOD",
+    "retrieval_method": "COSIGN_INITIALIZE",
+    "source_uri": "https://tuf-repo-cdn.sigstore.dev"
+  },
+  "acquired_at": "2026-08-15T08:00:00Z",
+  "trusted_root": {
+    "media_type": "application/vnd.dev.sigstore.trustedroot.v0.2+json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "size_bytes": 4096,
+    "certificate_authority_count": 1,
+    "transparency_log_count": 2,
+    "timestamp_authority_count": 1
+  },
+  "tooling": {
+    "verifier": "cosign",
+    "verifier_version": "v3.0.6"
+  },
+  "refresh_policy": {
+    "max_age_hours": 168,
+    "refresh_due_at": "2026-08-22T08:00:00Z",
+    "previous_snapshot_record_sha256": null,
+    "offline_import_approved": false
+  },
+  "claims": {
+    "tuf_metadata_verified_by_this_module": false,
+    "trusted_root_current_proven": false,
+    "future_revocation_awareness_proven": false,
+    "artifact_goodness_proven": false,
+    "semantic_truth_proven": false,
+    "production_readiness_proven": false,
+    "roadmap_completion_proven": false
+  }
+}
