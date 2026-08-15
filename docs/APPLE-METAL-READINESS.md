@@ -2,7 +2,10 @@
 
 Status: **IN PROGRESS reference implementation**
 
-Roadmap mapping: `P-025 Apple Metal Compatibility Checker`, reusable by `F-03 Local AI Doctor`.
+Canonical roadmap mapping: `P-009 Hardware Compatibility Detector`, `P-021 AI Hardware Readiness Tester`, and `P-022 GPU/NPU Capability Detector`; reusable by `F-03 Local AI Doctor`.
+
+> [!IMPORTANT]
+> `P-025` in `DAIS_PUBLIC_BUILD_OPPORTUNITY_MASTER_ROADMAP_v1.0.md` is **Unified/Variable Memory Configuration Assistant**, not an Apple Metal checker. The underlying AMD VGM repository is itself a hardware-specific proving ground for `P-025`; this Metal discovery adapter must not be counted as `P-025` completion/progress evidence.
 
 ## Purpose
 
@@ -55,4 +58,6 @@ For a real Metal application or local-AI backend:
 
 ## Completion gaps
 
-`P-025` remains **IN PROGRESS**. Completion requires a native Swift/Metal capability adapter using `MTLDevice`, Mac hardware/OS fixtures across representative families, real local-AI/backend acceptance, accessibility and multilingual documentation, dedicated distribution, release/tag evidence, known limitations and canonical completion evidence.
+The mapped roadmap items remain **IN PROGRESS**. Completion requires a native Swift/Metal capability adapter using `MTLDevice`, Mac hardware/OS fixtures across representative families, real local-AI/backend acceptance, accessibility and multilingual documentation, dedicated distribution where appropriate, release/tag evidence, known limitations and canonical completion evidence.
+
+The Apple-specific adapter is a reusable component, not a separately numbered opportunity in roadmap v1.0. If a future roadmap version adds a dedicated Apple Metal item, it should receive a new stable project ID rather than reusing `P-025`.
