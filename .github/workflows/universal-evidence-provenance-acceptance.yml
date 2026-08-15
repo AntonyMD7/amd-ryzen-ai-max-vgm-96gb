@@ -1,0 +1,438 @@
+name: Universal Evidence provenance acceptance
+
+on:
+  push:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  signed-provenance-exact-policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v3.0.6'
+
+      - name: Prepare deterministic artifact and exact policy identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p provenance-acceptance
+          cp examples/universal-evidence-readonly-example.json provenance-acceptance/universal-evidence-provenance-fixture.json
+          sha256sum provenance-acceptance/universal-evidence-provenance-fixture.json > provenance-acceptance/artifact.sha256
+          printf '%s\n' "https://github.com/${GITHUB_WORKFLOW_REF}" > provenance-acceptance/expected-signer-identity.txt
+          printf '%s\n' 'https://token.actions.githubusercontent.com' > provenance-acceptance/expected-issuer.txt
+          printf '%s\n' 'https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/blob/main/docs/UNIVERSAL-EVIDENCE-PROVENANCE-BUILD-TYPE.md' > provenance-acceptance/expected-build-type.txt
+          printf '%s\n' 'https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/blob/main/docs/UNIVERSAL-EVIDENCE-DEMO-BUILDER.md' > provenance-acceptance/expected-builder-id.txt
+          printf '%s\n' 'https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb' > provenance-acceptance/expected-source-repository.txt
+          echo 'PRODUCTION_CREDENTIAL_USED=FALSE'
+          echo 'SLSA_LEVEL_CLAIMED=NONE'
+
+      - name: Generate narrow SLSA Provenance v1 statement
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          out = Path('provenance-acceptance')
+          artifact = out / 'universal-evidence-provenance-fixture.json'
+          digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+          repo = (out / 'expected-source-repository.txt').read_text().strip()
+          build_type = (out / 'expected-build-type.txt').read_text().strip()
+          builder_id = (out / 'expected-builder-id.txt').read_text().strip()
+          workflow_ref = os.environ['GITHUB_WORKFLOW_REF']
+          sha = os.environ['GITHUB_SHA']
+          run_id = os.environ['GITHUB_RUN_ID']
+          attempt = os.environ['GITHUB_RUN_ATTEMPT']
+
+          statement = {
+              '_type': 'https://in-toto.io/Statement/v1',
+              'subject': [{
+                  'name': artifact.name,
+                  'digest': {'sha256': digest},
+              }],
+              'predicateType': 'https://slsa.dev/provenance/v1',
+              'predicate': {
+                  'buildDefinition': {
+                      'buildType': build_type,
+                      'externalParameters': {
+                          'sourceRepository': repo,
+                          'sourceCommit': sha,
+                          'workflowRef': workflow_ref,
+                      },
+                      'internalParameters': {},
+                      'resolvedDependencies': [{
+                          'uri': f'git+{repo}@{sha}',
+                          'digest': {'gitCommit': sha},
+                      }],
+                  },
+                  'runDetails': {
+                      'builder': {'id': builder_id},
+                      'metadata': {
+                          'invocationId': f'https://github.com/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{run_id}/attempts/{attempt}'
+                      },
+                  },
+              },
+          }
+          (out / 'provenance.unsigned.json').write_text(
+              json.dumps(statement, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Validate unsigned statement before signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/slsa_provenance_observation.py \
+            provenance-acceptance/provenance.unsigned.json \
+            provenance-acceptance/universal-evidence-provenance-fixture.json \
+            --artifact-name universal-evidence-provenance-fixture.json \
+            --build-type "$(cat provenance-acceptance/expected-build-type.txt)" \
+            --builder-id "$(cat provenance-acceptance/expected-builder-id.txt)" \
+            --source-repository "$(cat provenance-acceptance/expected-source-repository.txt)" \
+            --source-commit "$GITHUB_SHA" \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            > provenance-acceptance/unsigned-semantics.json
+          grep -q '"provenance_semantics_verified": true' provenance-acceptance/unsigned-semantics.json
+
+      - name: Keyless-sign complete in-toto statement
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign attest-blob \
+            --yes \
+            --bundle provenance-acceptance/provenance.sigstore.json \
+            --statement provenance-acceptance/provenance.unsigned.json \
+            > provenance-acceptance/attest.txt
+          test -s provenance-acceptance/provenance.sigstore.json
+          touch provenance-acceptance/attest.ok
+          echo 'KEYLESS_ATTESTATION_SIGNING=PASS'
+
+      - name: Verify attestation subject signer identity and issuer
+        shell: bash
+        run: |
+          set -euo pipefail
+          digest="$(cut -d' ' -f1 provenance-acceptance/artifact.sha256)"
+          identity="$(cat provenance-acceptance/expected-signer-identity.txt)"
+          issuer="$(cat provenance-acceptance/expected-issuer.txt)"
+          cosign verify-blob-attestation \
+            --bundle provenance-acceptance/provenance.sigstore.json \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" \
+            --type='https://slsa.dev/provenance/v1' \
+            --digest "$digest" \
+            --digestAlg sha256 \
+            > provenance-acceptance/verify-attestation.txt
+          touch provenance-acceptance/verify-attestation.ok
+          echo 'SIGNED_ATTESTATION_VERIFICATION=PASS'
+
+      - name: Extract authenticated statement and require bundle trust material
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import json
+          from pathlib import Path
+
+          out = Path('provenance-acceptance')
+          bundle = json.loads((out / 'provenance.sigstore.json').read_text(encoding='utf-8'))
+          envelope = bundle.get('dsseEnvelope')
+          material = bundle.get('verificationMaterial') or {}
+          tlog_entries = material.get('tlogEntries') or []
+          timestamp_data = material.get('timestampVerificationData') or {}
+          timestamps = timestamp_data.get('rfc3161Timestamps') or []
+
+          if bundle.get('mediaType') != 'application/vnd.dev.sigstore.bundle.v0.3+json':
+              raise SystemExit('unexpected Sigstore bundle media type')
+          if not isinstance(envelope, dict):
+              raise SystemExit('Sigstore attestation bundle has no DSSE envelope')
+          if envelope.get('payloadType') != 'application/vnd.in-toto+json':
+              raise SystemExit(f'unexpected DSSE payload type: {envelope.get("payloadType")!r}')
+          if not tlog_entries:
+              raise SystemExit('attestation bundle has no transparency-log material')
+          if not timestamps:
+              raise SystemExit('attestation bundle has no RFC3161 timestamp material')
+          payload = envelope.get('payload')
+          if not isinstance(payload, str) or not payload:
+              raise SystemExit('attestation bundle has no DSSE payload')
+
+          decoded = base64.b64decode(payload, validate=True)
+          signed_statement = json.loads(decoded)
+          unsigned_statement = json.loads((out / 'provenance.unsigned.json').read_text(encoding='utf-8'))
+          if signed_statement != unsigned_statement:
+              raise SystemExit('authenticated DSSE statement differs semantically from generated statement')
+
+          (out / 'provenance.authenticated.json').write_text(
+              json.dumps(signed_statement, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          inspection = {
+              'bundle_media_type': bundle['mediaType'],
+              'payload_type': envelope['payloadType'],
+              'tlog_entry_count': len(tlog_entries),
+              'rfc3161_timestamp_count': len(timestamps),
+              'authenticated_statement_matches_generated_statement': True,
+          }
+          (out / 'bundle-inspection.json').write_text(
+              json.dumps(inspection, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          (out / 'bundle-material.ok').touch()
+          print('AUTHENTICATED_STATEMENT_EXTRACTION=PASS')
+          print('TRANSPARENCY_TIMESTAMP_MATERIAL=PASS')
+          PY
+
+      - name: Validate authenticated provenance semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/slsa_provenance_observation.py \
+            provenance-acceptance/provenance.authenticated.json \
+            provenance-acceptance/universal-evidence-provenance-fixture.json \
+            --artifact-name universal-evidence-provenance-fixture.json \
+            --build-type "$(cat provenance-acceptance/expected-build-type.txt)" \
+            --builder-id "$(cat provenance-acceptance/expected-builder-id.txt)" \
+            --source-repository "$(cat provenance-acceptance/expected-source-repository.txt)" \
+            --source-commit "$GITHUB_SHA" \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            > provenance-acceptance/provenance-semantics.json
+          grep -q '"provenance_semantics_verified": true' provenance-acceptance/provenance-semantics.json
+          grep -q '"slsa_conformance_verified": false' provenance-acceptance/provenance-semantics.json
+          touch provenance-acceptance/provenance-semantics.ok
+          echo 'AUTHENTICATED_PROVENANCE_POLICY=PASS'
+
+      - name: Prove wrong signer wrong subject and semantic mutations fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          digest="$(cut -d' ' -f1 provenance-acceptance/artifact.sha256)"
+          issuer="$(cat provenance-acceptance/expected-issuer.txt)"
+
+          if cosign verify-blob-attestation \
+            --bundle provenance-acceptance/provenance.sigstore.json \
+            --certificate-identity 'https://github.com/example/incorrect/.github/workflows/incorrect.yml@refs/heads/main' \
+            --certificate-oidc-issuer "$issuer" \
+            --type='https://slsa.dev/provenance/v1' \
+            --digest "$digest" \
+            --digestAlg sha256 \
+            > provenance-acceptance/wrong-identity.txt 2>&1; then
+            echo 'Wrong signer identity unexpectedly verified.' >&2
+            exit 1
+          fi
+          touch provenance-acceptance/wrong-identity-rejected.ok
+
+          wrong_digest="$(printf '0%.0s' {1..64})"
+          if cosign verify-blob-attestation \
+            --bundle provenance-acceptance/provenance.sigstore.json \
+            --certificate-identity "$(cat provenance-acceptance/expected-signer-identity.txt)" \
+            --certificate-oidc-issuer "$issuer" \
+            --type='https://slsa.dev/provenance/v1' \
+            --digest "$wrong_digest" \
+            --digestAlg sha256 \
+            > provenance-acceptance/wrong-subject.txt 2>&1; then
+            echo 'Wrong subject digest unexpectedly verified.' >&2
+            exit 1
+          fi
+          touch provenance-acceptance/wrong-subject-rejected.ok
+
+          python - <<'PY'
+          import copy
+          import json
+          from pathlib import Path
+          out = Path('provenance-acceptance')
+          original = json.loads((out / 'provenance.authenticated.json').read_text())
+          bad_builder = copy.deepcopy(original)
+          bad_builder['predicate']['runDetails']['builder']['id'] = 'https://example.invalid/wrong-builder'
+          (out / 'provenance.bad-builder.json').write_text(json.dumps(bad_builder, indent=2, sort_keys=True) + '\n')
+          bad_source = copy.deepcopy(original)
+          bad_source['predicate']['buildDefinition']['externalParameters']['sourceCommit'] = '0' * 40
+          (out / 'provenance.bad-source.json').write_text(json.dumps(bad_source, indent=2, sort_keys=True) + '\n')
+          PY
+
+          common=(
+            provenance-acceptance/universal-evidence-provenance-fixture.json
+            --artifact-name universal-evidence-provenance-fixture.json
+            --build-type "$(cat provenance-acceptance/expected-build-type.txt)"
+            --builder-id "$(cat provenance-acceptance/expected-builder-id.txt)"
+            --source-repository "$(cat provenance-acceptance/expected-source-repository.txt)"
+            --source-commit "$GITHUB_SHA"
+            --workflow-ref "$GITHUB_WORKFLOW_REF"
+          )
+          if python scripts/slsa_provenance_observation.py provenance-acceptance/provenance.bad-builder.json "${common[@]}" > provenance-acceptance/bad-builder-result.txt 2>&1; then
+            echo 'Wrong provenance builder unexpectedly passed semantic policy.' >&2
+            exit 1
+          fi
+          if python scripts/slsa_provenance_observation.py provenance-acceptance/provenance.bad-source.json "${common[@]}" > provenance-acceptance/bad-source-result.txt 2>&1; then
+            echo 'Wrong provenance source unexpectedly passed semantic policy.' >&2
+            exit 1
+          fi
+          touch provenance-acceptance/semantic-negative-controls.ok
+          echo 'WRONG_SIGNER_REJECTION=PASS'
+          echo 'WRONG_SUBJECT_REJECTION=PASS'
+          echo 'PROVENANCE_SEMANTIC_NEGATIVE_CONTROLS=PASS'
+
+      - name: Evaluate exact signer-builder trust profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          out = Path('provenance-acceptance')
+          artifact = out / 'universal-evidence-provenance-fixture.json'
+          digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+          identity = (out / 'expected-signer-identity.txt').read_text().strip()
+          issuer = (out / 'expected-issuer.txt').read_text().strip()
+          builder_id = (out / 'expected-builder-id.txt').read_text().strip()
+          exact = (out / 'verify-attestation.ok').exists()
+          bundle = (out / 'bundle-material.ok').exists()
+          semantics = (out / 'provenance-semantics.ok').exists()
+
+          profile = {
+              'schema_version': '0.1',
+              'profile_id': 'github-actions-keyless-provenance-exact-v0.1',
+              'artifact': {'sha256': digest},
+              'signer': {
+                  'mode': 'SIGSTORE_KEYLESS',
+                  'exact_identity': identity,
+                  'exact_oidc_issuer': issuer,
+              },
+              'transparency': {'required': True},
+              'timestamp': {'required': True, 'accepted_sources': ['SIGSTORE_TSA']},
+              'provenance': {
+                  'builder_id_required': True,
+                  'allowed_builder_ids': [builder_id],
+              },
+              'claims': {
+                  'artifact_goodness_inferred': False,
+                  'semantic_truth_inferred': False,
+              },
+          }
+          observation = {
+              'artifact_sha256': digest,
+              'cryptographic_signature_verified': exact,
+              'certificate_identity': identity,
+              'certificate_oidc_issuer': issuer,
+              'transparency_verified': exact and bundle,
+              'timestamp_verified': exact and bundle,
+              'timestamp_source': 'SIGSTORE_TSA' if bundle else 'NONE',
+              'provenance_verified': exact and semantics,
+              'builder_id': builder_id if semantics else None,
+              'verifier': 'cosign-v3.0.6-attest-blob+authenticated-slsa-provenance-parser',
+          }
+          (out / 'trust-profile.json').write_text(json.dumps(profile, indent=2, sort_keys=True) + '\n')
+          (out / 'verifier-observation.json').write_text(json.dumps(observation, indent=2, sort_keys=True) + '\n')
+          PY
+
+          python scripts/evidence_trust_policy.py \
+            provenance-acceptance/trust-profile.json \
+            provenance-acceptance/verifier-observation.json \
+            > provenance-acceptance/trust-policy-result.json
+          grep -q '"policy_status": "POLICY_SATISFIED"' provenance-acceptance/trust-policy-result.json
+          grep -q '"builder_identity_requirement": true' provenance-acceptance/trust-policy-result.json
+          grep -q '"slsa_level_proven": null' provenance-acceptance/trust-policy-result.json
+          touch provenance-acceptance/trust-policy.ok
+          echo 'EXACT_SIGNER_BUILDER_TRUST_POLICY=PASS'
+
+      - name: Write fail-honest acceptance record
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out = Path('provenance-acceptance')
+          gates = {
+              'attestation_signature_verified': (out / 'verify-attestation.ok').exists(),
+              'bundle_trust_material_verified': (out / 'bundle-material.ok').exists(),
+              'provenance_semantics_verified': (out / 'provenance-semantics.ok').exists(),
+              'wrong_signer_rejected': (out / 'wrong-identity-rejected.ok').exists(),
+              'wrong_subject_rejected': (out / 'wrong-subject-rejected.ok').exists(),
+              'semantic_negative_controls_rejected': (out / 'semantic-negative-controls.ok').exists(),
+              'exact_signer_builder_trust_policy_satisfied': (out / 'trust-policy.ok').exists(),
+          }
+          record = {
+              'schema_version': '0.1',
+              'evidence_type': 'universal-evidence-signed-provenance-supporting-acceptance',
+              'status': 'PASS' if all(gates.values()) else 'INCOMPLETE_OR_FAILED',
+              'gates': gates,
+              'claims': {
+                  'in_toto_statement_v1_verified': gates['provenance_semantics_verified'],
+                  'slsa_provenance_v1_semantics_verified': gates['provenance_semantics_verified'],
+                  'exact_builder_policy_verified': gates['exact_signer_builder_trust_policy_satisfied'],
+                  'slsa_conformance_verified': False,
+                  'slsa_build_level_proven': None,
+                  'builder_security_assessed': False,
+                  'artifact_goodness_proven': False,
+                  'statement_semantic_truth_beyond_checked_fields_proven': False,
+                  'production_readiness_proven': False,
+                  'roadmap_completion_proven': False,
+              },
+              'privacy': {
+                  'long_lived_signing_key_used': False,
+                  'credential_value_retained': False,
+                  'user_data_used': False,
+                  'private_repository_data_used': False,
+                  'private_infrastructure_used': False,
+              },
+          }
+          (out / 'claim-boundary.json').write_text(json.dumps(record, indent=2, sort_keys=True) + '\n')
+          print(f"SIGNED_PROVENANCE_ACCEPTANCE={record['status']}")
+          PY
+
+      - name: Enforce final acceptance boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"status": "PASS"' provenance-acceptance/claim-boundary.json
+          grep -q '"slsa_provenance_v1_semantics_verified": true' provenance-acceptance/claim-boundary.json
+          grep -q '"exact_builder_policy_verified": true' provenance-acceptance/claim-boundary.json
+          grep -q '"slsa_conformance_verified": false' provenance-acceptance/claim-boundary.json
+          grep -q '"slsa_build_level_proven": null' provenance-acceptance/claim-boundary.json
+          grep -q '"roadmap_completion_proven": false' provenance-acceptance/claim-boundary.json
+
+      - name: Upload sanitized provenance acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal-evidence-signed-provenance-supporting-acceptance
+          path: |
+            provenance-acceptance/universal-evidence-provenance-fixture.json
+            provenance-acceptance/artifact.sha256
+            provenance-acceptance/provenance.unsigned.json
+            provenance-acceptance/provenance.authenticated.json
+            provenance-acceptance/provenance.sigstore.json
+            provenance-acceptance/attest.txt
+            provenance-acceptance/verify-attestation.txt
+            provenance-acceptance/bundle-inspection.json
+            provenance-acceptance/unsigned-semantics.json
+            provenance-acceptance/provenance-semantics.json
+            provenance-acceptance/bad-builder-result.txt
+            provenance-acceptance/bad-source-result.txt
+            provenance-acceptance/wrong-identity.txt
+            provenance-acceptance/wrong-subject.txt
+            provenance-acceptance/trust-profile.json
+            provenance-acceptance/verifier-observation.json
+            provenance-acceptance/trust-policy-result.json
+            provenance-acceptance/claim-boundary.json
+            provenance-acceptance/expected-signer-identity.txt
+            provenance-acceptance/expected-issuer.txt
+            provenance-acceptance/expected-build-type.txt
+            provenance-acceptance/expected-builder-id.txt
+            provenance-acceptance/expected-source-repository.txt
+          if-no-files-found: error
+          retention-days: 14
