@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dais.example/schemas/evidence-trust-profile-v0.1.schema.json",
+  "title": "DAIS Universal Evidence Trust Profile v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "artifact",
+    "signer",
+    "transparency",
+    "timestamp",
+    "provenance",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "profile_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "signer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "exact_identity", "exact_oidc_issuer"],
+      "properties": {
+        "mode": {"enum": ["SIGSTORE_KEYLESS"]},
+        "exact_identity": {"type": "string", "minLength": 3, "maxLength": 300},
+        "exact_oidc_issuer": {"type": "string", "format": "uri", "pattern": "^https://"}
+      }
+    },
+    "transparency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "required": {"type": "boolean"}
+      }
+    },
+    "timestamp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "accepted_sources"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "accepted_sources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["SIGSTORE_TSA", "REKOR_V2_TSA"]}
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["builder_id_required", "allowed_builder_ids"],
+      "properties": {
+        "builder_id_required": {"type": "boolean"},
+        "allowed_builder_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_goodness_inferred", "semantic_truth_inferred"],
+      "properties": {
+        "artifact_goodness_inferred": {"const": false},
+        "semantic_truth_inferred": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"timestamp": {"properties": {"required": {"const": true}}}}
+      },
+      "then": {
+        "properties": {"timestamp": {"properties": {"accepted_sources": {"minItems": 1}}}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"provenance": {"properties": {"builder_id_required": {"const": true}}}}
+      },
+      "then": {
+        "properties": {"provenance": {"properties": {"allowed_builder_ids": {"minItems": 1}}}}
+      }
+    }
+  ]
+}
