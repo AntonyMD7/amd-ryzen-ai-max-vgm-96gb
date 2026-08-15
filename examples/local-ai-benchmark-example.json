@@ -1,0 +1,58 @@
+{
+  "schema_version": "0.1",
+  "benchmark_id": "example-readonly-benchmark-a",
+  "observed_at_utc": "2026-08-15T00:00:00Z",
+  "producer": {
+    "tool": "example-import",
+    "version": "0.1",
+    "source_revision": "example-non-live"
+  },
+  "subject": {
+    "platform": "Linux",
+    "architecture": "x86_64",
+    "accelerator_class": "example-gpu-class",
+    "memory_bytes": 34359738368,
+    "public_hardware_label": "sanitized example platform"
+  },
+  "software": {
+    "backend": "llama.cpp",
+    "backend_version": "example-version",
+    "backend_revision": "example-revision",
+    "driver_runtime": "example-runtime"
+  },
+  "workload": {
+    "model_id": "example/model",
+    "model_revision": "example-revision",
+    "artifact_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "quantization": "example-quantization",
+    "task": "generation",
+    "prompt_tokens": 128,
+    "generated_tokens": 128,
+    "context_size": 4096,
+    "batch_size": 1,
+    "repetitions": 5,
+    "warmup_runs": 1
+  },
+  "performance": {
+    "tokens_per_second": 42.0,
+    "latency_seconds": null,
+    "measurement_source": "SANITIZED_EXAMPLE_NOT_LIVE",
+    "raw_evidence_ref": null
+  },
+  "energy": {
+    "status": "NOT_MEASURED",
+    "measurement_method": null,
+    "energy_kwh": null,
+    "method_version": null,
+    "evidence_ref": null
+  },
+  "privacy": {
+    "credentials_included": false,
+    "username_included": false,
+    "network_address_included": false,
+    "prompt_content_included": false
+  },
+  "limitations": [
+    "Synthetic sanitized example for schema validation only; not benchmark evidence."
+  ]
+}
