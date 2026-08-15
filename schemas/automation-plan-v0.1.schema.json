@@ -94,7 +94,7 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"mode": {"const": "MUTATING"}}},
+      "if": {"properties": {"mode": {"const": "MUTATING"}}, "required": ["mode"]},
       "then": {
         "properties": {
           "rollback": {
@@ -111,8 +111,7 @@
               "authorization_ref": {"type": "string", "minLength": 1}
             }
           }
-        },
-        "contains": {}
+        }
       }
     }
   ]
