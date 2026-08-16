@@ -1,0 +1,44 @@
+name: P-056 REUSE engine discovery
+
+on:
+  push:
+    branches:
+      - research/p056-reuse-engine-v0.11.0
+    paths:
+      - '.github/workflows/p056-reuse-engine-discovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Pull exact upstream release tag for discovery only
+        run: |
+          set -euo pipefail
+          docker pull fsfe/reuse:6.2.0
+          digest="$(docker image inspect fsfe/reuse:6.2.0 --format '{{index .RepoDigests 0}}')"
+          test -n "$digest"
+          case "$digest" in fsfe/reuse@sha256:*) ;; *) echo "unexpected digest: $digest" >&2; exit 1;; esac
+          printf '%s\n' "$digest" | tee p056-reuse-image-digest.txt
+
+      - name: Verify upstream tool identity and bounded command
+        run: |
+          set -euo pipefail
+          digest="$(cat p056-reuse-image-digest.txt)"
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 "$digest" --version | tee p056-reuse-version.txt
+          grep -E '(^| )reuse (v)?6\.2\.0($| )' p056-reuse-version.txt
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 128 "$digest" lint --help >/dev/null
+          echo 'P056_REUSE_ENGINE_DISCOVERY=PASS'
+
+      - name: Retain discovery evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p056-reuse-engine-discovery-${{ github.run_id }}
+          path: |
+            p056-reuse-image-digest.txt
+            p056-reuse-version.txt
+          retention-days: 14
+          if-no-files-found: error
