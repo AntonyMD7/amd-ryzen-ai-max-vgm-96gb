@@ -10,8 +10,8 @@ This ledger records public source/reference and completion progress without weak
 
 | State | Count | Meaning |
 |---|---:|---|
-| COMPLETE | **3** | P-025, P-051 and P-057 satisfy the full canonical completion contract for their explicitly released scopes |
-| IN PROGRESS | **224** | Every other `P-001` through `P-227` has public source/reference evidence or a mapped proving-ground implementation but retains unresolved completion gates |
+| COMPLETE | **4** | P-025, P-050, P-051 and P-057 satisfy the full canonical completion contract for their explicitly released scopes |
+| IN PROGRESS | **223** | Every other `P-001` through `P-227` has public source/reference evidence or a mapped proving-ground implementation but retains unresolved completion gates |
 | BLOCKED | 0 | No item is globally blocked from further engineering; individual external/real-world gates may still block completion |
 | DEFERRED | 0 | None intentionally deferred |
 | NOT STARTED | 0 | No opportunity remains without initial public source/reference coverage |
@@ -32,6 +32,28 @@ This ledger records public source/reference and completion progress without weak
 | Final handover | `docs/P025-COMPLETION-RECORD-v0.1.0.md` |
 
 P-025 completion is limited to the documented v0.1.0/reference-system scope. It is not universal AMD compatibility, a universal production-safety guarantee, WCAG conformance or multilingual acceptance.
+
+### P-050 — Evidence Validation Action
+
+| Field | Evidence |
+|---|---|
+| Version | `0.3.0` |
+| Release/tag | `v0.3.0` |
+| Exact released product source | `f00ad749a07a9067075c87f5ca20feab04695288` |
+| Release-control main commit | `f2695861fc2b91d84b56f87c955166e7c4b5dde7` |
+| Governed release + consumer workflow | `P-050 Evidence Validation Action v0.3.0 release`, run `31929278253` |
+| Plan evidence artifact | ID `9258798897`, SHA-256 `85550a3554671c8bc5267b6aeba5b3b0e9f7c0341cb2b27910be3f4be5cf826e` |
+| Publication evidence artifact | ID `9258800798`, SHA-256 `739031f7b298a3bd50378964dbf0e322e00bd0449e17841e205e945ff19f324c` |
+| learning-git consumer artifact | ID `9258802973`, SHA-256 `48415009559fe7c21a30875dc341562a97fcc8418bdc0c62f09f34efb7e33055` |
+| Kimi-Haul consumer artifact | ID `9258802825`, SHA-256 `d88308a8ef0142ed809deef1d3ed227ce0bc4dc92ee150f4dff2fdeeb80e9588` |
+| Completion record | `examples/public-build-completion-p050-v0.3.0.json` |
+| Final handover | `docs/P050-COMPLETION-RECORD-v0.3.0.md` |
+
+P-050 crossed the release boundary only after recursive break/fix loops exposed two integration defects that ordinary source testing had not fully proven: an incomplete supposedly hash-locked transitive runtime and brittle immediate repository-attestation retrieval. The permanent fixes added a dependency-clean Action acceptance lane, the missing exact dependency hash/version, cryptographic verification of the exact local attestation bundle, and separately mandatory bounded-retry repository retrieval.
+
+The public non-draft `v0.3.0` release was published on 2026-08-16 and independently resolves to exact product source `f00ad749a07a9067075c87f5ca20feab04695288`. The released Action was then consumed successfully from two separate real public-repository checkouts: `learning-git` at `01723a1825113de08810193f37e8047d978433c2` and `Kimi-Haul` at `5905f5be3f812b801ab5f7ec5b33c65c166131fc`, with both consumer repositories remaining read-only.
+
+P-050 completion is scoped to v0.3.0: Linux x64 / CPython 3.12 DAIS Universal Evidence schema validation and optional directly declared local artifact SHA-256 verification. It does not claim recursive evidence-bundle support, redaction/data classification, producer authentication merely from PASS, authorization, semantic truth, artifact goodness, WCAG conformance or multilingual user acceptance.
 
 ### P-051 — Release Automation Action / P-057 — Release Governance Tool
 
@@ -66,7 +88,7 @@ All six flagships remain **IN PROGRESS**. Completion of individual projects does
 | F-02 Universal System Doctor | IN PROGRESS | privacy-minimizing diagnostics; conflict-preserving evidence fusion; bounded psutil adapter; Ubuntu/Windows/macOS hosted acceptance; signed Universal Evidence binding | representative physical hardware/vendor-specialist acceptance; accessibility/user acceptance; dedicated release; independent review |
 | F-03 Local AI Doctor | IN PROGRESS | readiness/model-fit orchestration; bounded Ollama adapter; real pinned Ollama CI; exact loaded runtime footprint/context and bounded inference evidence | physical accelerators/platforms; additional backends; long-context/concurrency/offline evidence; provenance/license strengthening; release/review |
 | F-04 Hardware Compatibility Commons | IN PROGRESS | privacy-safe intake; exact-context conflict-preserving index/query; governed external-source rights/privacy/provenance gate | real community corpus; moderation/correction/retention/abuse policy; richer accessible browse UX; independent observations; signed provenance integration; release |
-| F-05 Universal Evidence Standard | IN PROGRESS | schema/validator/action; exact-byte/keyless Sigstore verification; transparency + RFC3161 material; in-toto/SLSA-style provenance; exact signer-builder policy; offline root verification; authenticated historical TUF rotation | broader independent interoperability/security review; long-term trust governance; dedicated reusable release/distribution |
+| F-05 Universal Evidence Standard | IN PROGRESS | schema/validator/action; exact-byte/keyless Sigstore verification; transparency + RFC3161 material; in-toto/SLSA-style provenance; exact signer-builder policy; offline root verification; authenticated historical TUF rotation; released P-050 validation component | broader independent interoperability/security review; long-term trust governance; remaining standard-level components and dedicated foundation release/distribution |
 | F-06 Accessible AI | IN PROGRESS | semantic multilingual reporting; axe automated evidence; keyboard/reflow browser acceptance; strict reproducible manual assistive-technology session protocol | real assistive-technology sessions; disability-inclusive real-user acceptance; broader language acceptance; dedicated release |
 
 ## Opportunity coverage register
@@ -84,7 +106,8 @@ All IDs not explicitly marked COMPLETE below remain **IN PROGRESS**.
 | **P-025** | **COMPLETE v0.1.0 — AMD VGM unified/variable-memory configuration toolkit** |
 | P-026–P-038 | Local AI Doctor ecosystem |
 | P-039–P-045 | Repository Doctor plus safe issue/PR/docs automation planning |
-| P-046–P-050 | Specialist repository/supply-chain tools + Universal Evidence validation Action |
+| P-046–P-049 | Specialist repository/supply-chain tools |
+| **P-050** | **COMPLETE v0.3.0 — reproducible DAIS Universal Evidence validation Action with released-ref consumer acceptance** |
 | **P-051** | **COMPLETE v0.2.0 — reusable governed GitHub Release automation Action** |
 | P-052–P-056 | Contributor safety, maintenance and supporting release-quality tooling |
 | **P-057** | **COMPLETE v0.2.0 — exact-source release governance/evidence/recovery tool** |
@@ -105,9 +128,9 @@ All IDs not explicitly marked COMPLETE below remain **IN PROGRESS**.
 | P-211–P-220 | SafeFix, Universal Evidence, recovery, troubleshooting, attestation/fleet and compatibility foundations |
 | P-221–P-227 | Community evidence, troubleshooting knowledge graph, open compatibility/evidence, reference implementations and public-solution intake |
 
-## Recent depth and release tranches
+## Recent depth and completion tranches
 
-The full historical PR sequence remains in Git history. High-leverage promoted tranches include:
+The full historical PR sequence remains in Git history. Recent high-leverage promoted tranches include:
 
 | PR | Scope | Result |
 |---|---|---|
@@ -121,17 +144,20 @@ The full historical PR sequence remains in Git history. High-leverage promoted t
 | #78 | F-06 reproducible manual assistive-technology evidence protocol | MERGED / CI PASS |
 | #79 | F-05 authenticated historical TUF root-rotation acceptance | MERGED / CI PASS |
 | #80 | F-01 abrupt-process recovery acceptance | MERGED / CI PASS |
-| #81–#82 | P-051/P-057 read-only/exact-main release readiness | MERGED / CI PASS |
 | #83–#84 | P-025 governed release and final completion | MERGED / CI PASS; P-025 COMPLETE |
-| #85 | P-051/P-057 reusable governed-release toolkit | MERGED / CI PASS |
-| #86 | dedicated generic release path + integration red-team fixes + beginner/support productization | MERGED / CI PASS |
-| #87 | squash-merge-compatible canonical source binding | MERGED / CI PASS; public v0.2.0 release PASS |
+| #85–#87 | P-051/P-057 reusable governed release product, integration fixes and exact-source release | MERGED / CI PASS; public v0.2.0 release PASS |
+| #89–#91 | P-050 Action hardening, reproducible runtime and signed-attestation integration | MERGED / CI PASS |
+| #92 | P-050 v0.3.0 productization + clean-runtime red-team fix | MERGED / CI PASS |
+| #93 | P-050 propagation-safe independent attestation verification | MERGED / canonical-main CI PASS |
+| #94 | P-050 governed v0.3.0 exact-source release + two independent released-ref consumers | MERGED / release + 2/2 consumers PASS |
 
 ## Search-before-build adoption register
 
-The portfolio prefers established upstream ecosystems where they already own the specialist problem. Examples include osquery/hw-probe/vendor tooling for systems, Ollama/llama.cpp/vLLM for local AI, OpenSSF/Gitleaks/markdownlint/lychee/OSV/SPDX/REUSE for repository quality, in-toto/SLSA/Sigstore/OpenTelemetry/W3C PROV for evidence/provenance, WCAG/WAI/axe/Pa11y for accessibility, NLM/FDA/NCBI/HL7 for health information, established nonprofit/farm/business platforms where appropriate, and A2A/MCP for agent interoperability.
+The portfolio prefers established upstream ecosystems where they already own the specialist problem. Examples include osquery/hw-probe/vendor tooling for systems, Ollama/llama.cpp/vLLM for local AI, OpenSSF/Gitleaks/markdownlint/lychee/OSV/SPDX/REUSE for repository quality, JSON Schema/python-jsonschema for schema validation, in-toto/SLSA/Sigstore/GitHub artifact attestations/OpenTelemetry/W3C PROV for evidence/provenance, WCAG/WAI/axe/Pa11y for accessibility, NLM/FDA/NCBI/HL7 for health information, established nonprofit/farm/business platforms where appropriate, and A2A/MCP for agent interoperability.
 
 For release automation specifically, GitHub Releases remains the publication system; Release Please remains a mature conventional-commit/changelog/release-PR system and Changesets a mature package/monorepo versioning system. P-051/P-057 deliberately add an exact-source governance/evidence boundary instead of cloning those capabilities.
+
+P-050 similarly does not recreate generic JSON Schema or signed-attestation systems: it adds the DAIS-specific fail-closed schema/local-hash validation boundary and composes with authenticated provenance as a separate claim.
 
 ## Portfolio-wide completion gaps
 
@@ -148,11 +174,11 @@ The following still prevent a truthful COMPLETE state for most entries:
 
 ## Next phase
 
-The completion factory now has three evidence-bound completions and a reusable release-governance primitive that can accelerate later releases without lowering their gates:
+The completion factory now has four evidence-bound completions and reusable evidence/release primitives that can accelerate later products without lowering their gates:
 
-1. preserve P-025, P-051 and P-057 as immutable scope-bound completion records;
-2. use the released governed-release toolkit for later products only after each product has independently satisfied its pre-release gates;
-3. deepen/release the six shared foundations in dependency order where their real-world gates are reachable;
+1. preserve P-025, P-050, P-051 and P-057 as immutable scope-bound completion records;
+2. use released P-050 for evidence validation and P-051/P-057 for governed releases only where each later product independently satisfies its own gates;
+3. deepen/release the six shared foundations in dependency order where real-world gates are reachable;
 4. select the next highest-readiness individual products and close their 19 gates one by one;
 5. continue to prefer mature upstream contribution/integration over unnecessary duplication;
 6. synchronize canonical DAIS status only after machine-checkable completion records pass fresh CI.
