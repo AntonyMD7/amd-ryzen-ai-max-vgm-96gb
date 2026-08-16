@@ -68,6 +68,7 @@ runs:
             "jsonschema-specifications": "2025.9.1",
             "referencing": "0.37.0",
             "rpds-py": "0.27.1",
+            "typing-extensions": "4.16.0",
         }
         observed = {name: md.version(name) for name in expected}
         assert observed == expected, (observed, expected)
