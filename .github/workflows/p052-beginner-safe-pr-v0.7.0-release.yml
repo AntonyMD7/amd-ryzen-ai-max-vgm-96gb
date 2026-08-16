@@ -1,0 +1,372 @@
+name: P-052 Beginner-Safe PR Creator v0.7.0 governed release
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p052-beginner-safe-pr-v0.7.0-release.yml'
+      - 'release/p052-beginner-safe-pr-v0.7.0.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/p052-beginner-safe-pr-v0.7.0-release.yml'
+      - 'release/p052-beginner-safe-pr-v0.7.0.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p052-beginner-safe-pr-v0.7.0-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed release-control source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Require exact P-052 product source retained and ancestral
+        run: |
+          set -euo pipefail
+          source_commit="$(python -c "import json;print(json.load(open('release/p052-beginner-safe-pr-v0.7.0.json'))['source_commit'])")"
+          git cat-file -e "${source_commit}^{commit}"
+          git merge-base --is-ancestor "$source_commit" "$GITHUB_SHA"
+          for p in \
+            '.github/actions/beginner-safe-pr/action.yml' \
+            '.github/actions/beginner-safe-pr/safe_pr.py' \
+            '.github/workflows/p052-beginner-safe-pr.yml' \
+            '.github/ISSUE_TEMPLATE/p052-beginner-safe-pr.yml' \
+            'docs/P052-BEGINNER-SAFE-PR-START-HERE.md' \
+            'docs/P052-BEGINNER-SAFE-PR.md' \
+            'docs/P052-RELEASE-NOTES-v0.7.0.md' \
+            'tests/test_p052_beginner_safe_pr.py'; do
+            git cat-file -e "${source_commit}:${p}"
+          done
+          echo 'P052_EXACT_PRODUCT_SOURCE_RETAINED=PASS'
+
+      - name: Install test-only validation dependency
+        run: python -m pip install --disable-pip-version-check 'pytest>=8,<9'
+
+      - name: Re-run P-052 adversarial contract tests
+        run: python -m pytest -q tests/test_p052_beginner_safe_pr.py
+
+      - name: Exercise governed release plan only
+        id: release-plan
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/p052-beginner-safe-pr-v0.7.0.json
+          publish: 'false'
+          evidence-file: p052-release-plan-evidence.json
+
+      - name: Require non-mutating release plan
+        env:
+          ACTION_STATUS: ${{ steps.release-plan.outputs.status }}
+        run: |
+          set -euo pipefail
+          test "$ACTION_STATUS" = READY_FOR_TRUSTED_PUSH
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('p052-release-plan-evidence.json').read_text())
+          assert d['mode']=='PLAN_ONLY'
+          assert d['published'] is False
+          assert d['draft_created'] is False
+          assert d['roadmap_completion_promoted'] is False
+          print('P052_RELEASE_PLAN=PASS')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+
+      - name: Retain sanitized release-plan evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p052-release-plan-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            p052-release-plan-evidence.json
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Publish exact P-052 source through governed release action
+        id: publish
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/p052-beginner-safe-pr-v0.7.0.json
+          publish: 'true'
+          allowed-ref: refs/heads/main
+          evidence-file: p052-publication-evidence.json
+
+      - name: Independently verify public release and exact tag target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(python -c "import json;print(json.load(open('release/p052-beginner-safe-pr-v0.7.0.json'))['tag'])")"
+          source_commit="$(python -c "import json;print(json.load(open('release/p052-beginner-safe-pr-v0.7.0.json'))['source_commit'])")"
+          title="$(python -c "import json;print(json.load(open('release/p052-beginner-safe-pr-v0.7.0.json'))['title'])")"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName,name,url,publishedAt > p052-public-release.json
+          python - "$tag" "$source_commit" "$title" <<'PY'
+          import json, os, subprocess, sys
+          from pathlib import Path
+          tag, source, title=sys.argv[1:]
+          release=json.loads(Path('p052-public-release.json').read_text())
+          assert release['isDraft'] is False
+          assert release['tagName']==tag
+          assert release['name']==title
+          assert release['publishedAt']
+          remote=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}.git"
+          subprocess.run(['git','fetch','--force',remote,f'refs/tags/{tag}:refs/tags/{tag}'],check=True)
+          resolved=subprocess.check_output(['git','rev-list','-n','1',tag],text=True).strip()
+          assert resolved==source,(resolved,source)
+          out={
+            'schema_version':'1.0',
+            'evidence_type':'p052-governed-release-publication',
+            'roadmap_id':'P-052',
+            'tag':tag,
+            'intended_source_commit':source,
+            'resolved_tag_commit':resolved,
+            'release_url':release['url'],
+            'published_at':release['publishedAt'],
+            'exact_tag_target_verified':True,
+            'roadmap_completion_promoted':False,
+            'released_ref_real_draft_acceptance_required':True,
+            'final_completion_audit_required':True,
+          }
+          Path('p052-independent-release-verification.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print('P052_GOVERNED_RELEASE=PASS')
+          print('P052_EXACT_PUBLIC_TAG=PASS')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+
+      - name: Retain publication evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p052-publication-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            p052-publication-evidence.json
+            p052-public-release.json
+            p052-independent-release-verification.json
+          retention-days: 30
+          if-no-files-found: error
+
+  released-real-draft-acceptance:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout canonical main without credential persistence
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Record exact disposable head and clean worktree
+        id: before
+        env:
+          EXPECTED_HEAD: 41f0d6760d351db273880e641d47114caa5fe9f6
+        run: |
+          set -euo pipefail
+          remote="https://github.com/${GITHUB_REPOSITORY}.git"
+          actual="$(git ls-remote "$remote" refs/heads/p052-acceptance/v0.7.0 | awk '{print $1}')"
+          test "$actual" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          echo "head=$actual" >> "$GITHUB_OUTPUT"
+          echo "base=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo 'P052_DISPOSABLE_HEAD_IDENTITY=PASS'
+
+      - name: Build exact released-ref reviewed plan
+        id: plan
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/beginner-safe-pr@v0.7.0
+        with:
+          mode: plan
+          repository: ${{ github.repository }}
+          title: P-052 disposable released-ref acceptance
+          summary: Exercises the released draft-only PR creation boundary against a harmless same-repository fixture branch.
+          base: main
+          head: p052-acceptance/v0.7.0
+          tests-run: 'true'
+          ci-expected: 'true'
+          secrets-reviewed: 'true'
+          scope-reviewed: 'true'
+          rollback-considered: 'true'
+
+      - name: Create one real draft through released P-052
+        id: create
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/beginner-safe-pr@v0.7.0
+        with:
+          mode: create
+          repository: ${{ github.repository }}
+          title: P-052 disposable released-ref acceptance
+          summary: Exercises the released draft-only PR creation boundary against a harmless same-repository fixture branch.
+          base: main
+          head: p052-acceptance/v0.7.0
+          tests-run: 'true'
+          ci-expected: 'true'
+          secrets-reviewed: 'true'
+          scope-reviewed: 'true'
+          rollback-considered: 'true'
+          expected-plan-sha256: ${{ steps.plan.outputs.plan-sha256 }}
+          confirmation: CREATE_DRAFT_PR
+          github-token: ${{ github.token }}
+
+      - name: Independently verify exact draft-only result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.create.outputs.pr-number }}
+          CREATED: ${{ steps.create.outputs.created }}
+          PLAN_SHA256: ${{ steps.plan.outputs.plan-sha256 }}
+          EXPECTED_HEAD: ${{ steps.before.outputs.head }}
+          EXPECTED_BASE: ${{ steps.before.outputs.base }}
+        run: |
+          set -euo pipefail
+          test "$CREATED" = true
+          [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > /tmp/p052-pr.json
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/p052-acceptance/v0.7.0" > /tmp/p052-head-ref.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          pr=json.loads(Path('/tmp/p052-pr.json').read_text())
+          head_ref=json.loads(Path('/tmp/p052-head-ref.json').read_text())
+          assert pr['draft'] is True
+          assert pr['state']=='open'
+          assert pr['title']=='P-052 disposable released-ref acceptance'
+          assert pr['base']['ref']=='main'
+          assert pr['head']['ref']=='p052-acceptance/v0.7.0'
+          assert pr['maintainer_can_modify'] is False
+          assert head_ref['object']['sha']==os.environ['EXPECTED_HEAD']
+          assert len(os.environ['PLAN_SHA256'])==64
+          print('P052_REAL_DRAFT_CREATED=PASS')
+          print('P052_EXACT_BRANCH_BOUNDARY=PASS')
+          PY
+          test -z "$(git status --porcelain)"
+
+      - name: Require released-ref retry to reuse the same draft
+        id: replay
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/beginner-safe-pr@v0.7.0
+        with:
+          mode: create
+          repository: ${{ github.repository }}
+          title: P-052 disposable released-ref acceptance
+          summary: Exercises the released draft-only PR creation boundary against a harmless same-repository fixture branch.
+          base: main
+          head: p052-acceptance/v0.7.0
+          tests-run: 'true'
+          ci-expected: 'true'
+          secrets-reviewed: 'true'
+          scope-reviewed: 'true'
+          rollback-considered: 'true'
+          expected-plan-sha256: ${{ steps.plan.outputs.plan-sha256 }}
+          confirmation: CREATE_DRAFT_PR
+          github-token: ${{ github.token }}
+
+      - name: Verify idempotency and write sanitized acceptance evidence
+        env:
+          CREATED_PR: ${{ steps.create.outputs.pr-number }}
+          REPLAY_PR: ${{ steps.replay.outputs.pr-number }}
+          REPLAY_CREATED: ${{ steps.replay.outputs.created }}
+          PLAN_SHA256: ${{ steps.plan.outputs.plan-sha256 }}
+          ACCEPTANCE_HEAD: ${{ steps.before.outputs.head }}
+          RELEASE_CONTROL_MAIN: ${{ steps.before.outputs.base }}
+        run: |
+          set -euo pipefail
+          test "$REPLAY_CREATED" = false
+          test "$CREATED_PR" = "$REPLAY_PR"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          data={
+            'schema_version':'1.0',
+            'roadmap_id':'P-052',
+            'acceptance_type':'REAL_SAME_REPOSITORY_RELEASED_REF_DRAFT_PR',
+            'released_ref':'v0.7.0',
+            'release_control_main':os.environ['RELEASE_CONTROL_MAIN'],
+            'acceptance_head_commit':os.environ['ACCEPTANCE_HEAD'],
+            'pr_number':int(os.environ['CREATED_PR']),
+            'plan_sha256':os.environ['PLAN_SHA256'],
+            'first_create':'DRAFT_CREATED',
+            'replay':'EXISTING_DRAFT_REUSED',
+            'draft_verified':True,
+            'exact_base_head_verified':True,
+            'source_branch_mutation_performed':False,
+            'worktree_mutation_performed':False,
+            'reviewer_requested':False,
+            'ready_transition_performed':False,
+            'merge_performed':False,
+            'secret_or_token_retained':False,
+            'cleanup_required':True,
+            'roadmap_completion_promoted':False,
+          }
+          Path('p052-real-draft-acceptance.json').write_text(json.dumps(data,indent=2,sort_keys=True)+'\n')
+          print('P052_RELEASED_REF_IDEMPOTENCY=PASS')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+
+      - name: Close disposable acceptance draft
+        if: always() && steps.create.outputs.pr-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.create.outputs.pr-number }}
+        run: |
+          set -euo pipefail
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" -f state=closed > /tmp/p052-closed.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('/tmp/p052-closed.json').read_text())
+          assert d['state']=='closed'
+          assert d['merged'] is False
+          print('P052_DISPOSABLE_DRAFT_CLEANUP=PASS')
+          PY
+
+      - name: Record cleanup into retained evidence
+        if: always() && steps.create.outputs.pr-number != ''
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('p052-real-draft-acceptance.json')
+          if p.exists():
+              d=json.loads(p.read_text())
+              d['cleanup_closed']=True
+              d['cleanup_merged']=False
+              d['cleanup_source_branch_deleted']=False
+              p.write_text(json.dumps(d,indent=2,sort_keys=True)+'\n')
+          PY
+
+      - name: Retain privacy-minimized released-ref draft evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p052-released-ref-real-draft-${{ github.run_id }}
+          path: p052-real-draft-acceptance.json
+          retention-days: 30
+          if-no-files-found: error
