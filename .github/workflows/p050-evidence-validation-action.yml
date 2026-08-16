@@ -29,10 +29,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout exact candidate
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
 
@@ -141,15 +143,16 @@ jobs:
       attestations: write
     steps:
       - name: Checkout canonical main
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
       - name: Set up exact supported Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
 
       - name: Create a real validator report through P-050
-        id: p050
         shell: bash
         run: |
           set -euo pipefail
@@ -160,6 +163,7 @@ jobs:
           from pathlib import Path
           artifact = Path(sys.argv[1])
           record = json.loads(Path('examples/universal-evidence-readonly-example.json').read_text(encoding='utf-8'))
+          record['evidence_id'] = 'p050-attestation-interoperability'
           record['artifacts'] = [{
               'name': 'result.txt',
               'sha256': hashlib.sha256(artifact.read_bytes()).hexdigest(),
@@ -188,27 +192,84 @@ jobs:
           printf '%s  %s\n' "$REPORT_SHA" p050-validation-report.json | sha256sum -c -
 
       - name: Attest exact P-050 validation report
+        id: attest
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
         with:
           subject-path: p050-validation-report.json
+          create-storage-record: false
 
-      - name: Independently verify GitHub attestation
+      - name: Cryptographically verify exact local attestation bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          test -n "$BUNDLE"
+          test -s "$BUNDLE"
+          signer="$GITHUB_REPOSITORY/.github/workflows/p050-evidence-validation-action.yml"
+          gh attestation verify p050-validation-report.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "$BUNDLE" \
+            --signer-workflow "$signer" \
+            --source-ref "$GITHUB_REF" \
+            --source-digest "$GITHUB_SHA" \
+            --format json > p050-attestation-local-verification.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('p050-attestation-local-verification.json').read_text(encoding='utf-8'))
+          assert isinstance(data, list) and data, data
+          for item in data:
+              vr = item.get('verificationResult') or {}
+              sig = vr.get('signature') or {}
+              assert sig.get('certificate'), item
+              assert vr.get('verifiedTimestamps'), item
+          print('P050_LOCAL_BUNDLE_CRYPTO_VERIFY=PASS')
+          PY
+
+      - name: Verify repository-attestation retrieval with bounded propagation retry
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh attestation verify p050-validation-report.json --repo "$GITHUB_REPOSITORY" > p050-attestation-verification.txt
-          grep -qi 'verification succeeded' p050-attestation-verification.txt || grep -qi 'attestation' p050-attestation-verification.txt
-          echo 'P050_GITHUB_ATTESTATION_INTEROP=PASS'
-          echo 'SCHEMA_HASH_VALIDATION_EQUALS_PRODUCER_AUTHENTICATION=FALSE'
-          echo 'ROADMAP_COMPLETION_CLAIMED=FALSE'
+          signer="$GITHUB_REPOSITORY/.github/workflows/p050-evidence-validation-action.yml"
+          success=0
+          : > p050-attestation-api-errors.txt
+          for delay in 0 2 4 8 12 16; do
+            if [ "$delay" -gt 0 ]; then sleep "$delay"; fi
+            if gh attestation verify p050-validation-report.json \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$signer" \
+              --source-ref "$GITHUB_REF" \
+              --source-digest "$GITHUB_SHA" \
+              --format json > p050-attestation-repository-verification.json 2>>p050-attestation-api-errors.txt; then
+              success=1
+              break
+            fi
+          done
+          test "$success" = 1
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('p050-attestation-repository-verification.json').read_text(encoding='utf-8'))
+          assert isinstance(data, list) and data, data
+          for item in data:
+              vr = item.get('verificationResult') or {}
+              assert (vr.get('signature') or {}).get('certificate'), item
+              assert vr.get('verifiedTimestamps'), item
+          print('P050_GITHUB_ATTESTATION_REPOSITORY_RETRIEVAL=PASS')
+          print('SCHEMA_HASH_VALIDATION_EQUALS_PRODUCER_AUTHENTICATION=FALSE')
+          print('ROADMAP_COMPLETION_CLAIMED=FALSE')
+          PY
 
       - name: Retain sanitized interoperability evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: p050-attestation-interop-${{ github.run_id }}
           path: |
             p050-validation-report.json
-            p050-attestation-verification.txt
+            p050-attestation-local-verification.json
+            p050-attestation-repository-verification.json
+            p050-attestation-api-errors.txt
           retention-days: 30
           if-no-files-found: error
