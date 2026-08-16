@@ -92,7 +92,7 @@ jobs:
           assert data['privacy']['source_text_retained'] is False
           assert data['privacy']['matched_text_retained'] is False
           assert data['privacy']['absolute_paths_retained'] is False
-          assert data['privacy']['credentials_retained'] is False
+          assert data['privacy']['credential_values_retained'] is False
           assert data['claims']['repository_safe'] is False
           assert data['claims']['script_safe_to_execute'] is False
           print('P058_ROOT_CONTAINMENT_NEGATIVE=PASS')
@@ -163,13 +163,13 @@ jobs:
           cp "$MEDIUM_RESULT" p058-medium-result.json
           python3 - <<'PY'
           import json
-          from patlib import Path
+          from pathlib import Path
           for name in ('p058-clean-result.json','p058-dangerous-result.json','p058-medium-result.json'):
               data=json.loads(Path(name).read_text())
               assert data['privacy']['source_text_retained'] is False
               assert data['privacy']['matched_text_retained'] is False
               assert data['privacy']['absolute_paths_retained'] is False
-              assert data['privacy']['credentials_retained'] is False
+              assert data['privacy']['credential_values_retained'] is False
               assert data['claims']['repository_safe'] is False
               assert data['claims']['script_safe_to_execute'] is False
           dangerous=json.loads(Path('p058-dangerous-result.json').read_text())
