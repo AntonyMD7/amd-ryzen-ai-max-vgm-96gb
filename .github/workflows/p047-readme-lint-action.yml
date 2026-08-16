@@ -1,0 +1,148 @@
+name: P-047 README Lint Action acceptance
+
+on:
+  pull_request:
+    paths:
+      - '.github/actions/readme-lint/**'
+      - '.github/workflows/p047-readme-lint-action.yml'
+      - 'tests/test_p047_readme_lint_contract.py'
+      - 'docs/P047-README-LINT-START-HERE.md'
+      - 'docs/P047-README-LINT-ACTION.md'
+      - '.github/ISSUE_TEMPLATE/p047-readme-lint.yml'
+      - 'RELEASE-NOTES-v0.4.0.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/actions/readme-lint/**'
+      - '.github/workflows/p047-readme-lint-action.yml'
+      - 'tests/test_p047_readme_lint_contract.py'
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Run P-047 adversarial contract tests
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input 'pytest>=8,<9'
+          python -m pytest -q tests/test_p047_readme_lint_contract.py
+
+      - name: Create disposable positive and negative fixtures
+        run: |
+          set -euo pipefail
+          mkdir -p .p047-fixtures/pass .p047-fixtures/fail .p047-fixtures/empty
+          cat > .p047-fixtures/pass/README.md <<'EOF'
+          # Example README
+
+          This is a small public fixture for the P-047 acceptance lane.
+
+          ## Install
+
+          No installation is required.
+
+          ## Usage
+
+          Run the example.
+          EOF
+          cat > .p047-fixtures/fail/README.md <<'EOF'
+          #Bad heading
+
+          broken
+          EOF
+          sha256sum .p047-fixtures/pass/README.md > /tmp/p047-before.sha256
+
+      - name: Require valid README acceptance and machine outputs
+        id: good
+        uses: ./.github/actions/readme-lint
+        with:
+          root: .p047-fixtures/pass
+
+      - name: Prove valid README input was not mutated
+        env:
+          ACTION_STATUS: ${{ steps.good.outputs.status }}
+          README_COUNT: ${{ steps.good.outputs.readme-count }}
+          UPSTREAM_COMMIT: ${{ steps.good.outputs.upstream-commit }}
+        run: |
+          set -euo pipefail
+          sha256sum --check /tmp/p047-before.sha256
+          test "$ACTION_STATUS" = PASS
+          test "$README_COUNT" = 1
+          test "$UPSTREAM_COMMIT" = 21c1be1b93ad9ed58fa840aacc3f279cde2a72ff
+          echo 'P047_VALID_README=PASS'
+          echo 'P047_INPUT_MUTATION=NO'
+
+      - name: Require invalid README failure
+        id: bad
+        continue-on-error: true
+        uses: ./.github/actions/readme-lint
+        with:
+          root: .p047-fixtures/fail
+
+      - name: Require empty-scope failure
+        id: empty
+        continue-on-error: true
+        uses: ./.github/actions/readme-lint
+        with:
+          root: .p047-fixtures/empty
+
+      - name: Require traversal refusal
+        id: traversal
+        continue-on-error: true
+        uses: ./.github/actions/readme-lint
+        with:
+          root: ../outside
+
+      - name: Assert negative controls fail closed
+        env:
+          BAD_OUTCOME: ${{ steps.bad.outcome }}
+          EMPTY_OUTCOME: ${{ steps.empty.outcome }}
+          TRAVERSAL_OUTCOME: ${{ steps.traversal.outcome }}
+        run: |
+          set -euo pipefail
+          test "$BAD_OUTCOME" = failure
+          test "$EMPTY_OUTCOME" = failure
+          test "$TRAVERSAL_OUTCOME" = failure
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          out = {
+              'schema_version': '1.0',
+              'roadmap_id': 'P-047',
+              'claim': 'README_LINT_ACTION_HOSTED_ACCEPTANCE',
+              'valid_readme': 'PASS',
+              'invalid_readme_negative_control': os.environ['BAD_OUTCOME'],
+              'empty_scope_negative_control': os.environ['EMPTY_OUTCOME'],
+              'traversal_negative_control': os.environ['TRAVERSAL_OUTCOME'],
+              'input_mutation_performed': False,
+              'auto_fix_enabled': False,
+              'permissions': 'contents:read',
+              'upstream_action_commit': '21c1be1b93ad9ed58fa840aacc3f279cde2a72ff',
+              'roadmap_completion_claimed': False,
+              'release_required_before_completion': True,
+          }
+          Path('p047-hosted-acceptance.json').write_text(json.dumps(out, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          print('P047_NEGATIVE_CONTROLS=PASS')
+          print('ROADMAP_COMPLETION_CLAIMED=FALSE')
+          PY
+
+      - name: Retain sanitized P-047 acceptance evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p047-readme-lint-acceptance-${{ github.run_id }}
+          path: p047-hosted-acceptance.json
+          retention-days: 14
+          if-no-files-found: error
