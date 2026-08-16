@@ -38,9 +38,41 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install pinned JSON Schema validator
+    - name: Require supported immutable runtime scope
       shell: bash
-      run: python -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+      env:
+        DAIS_RUNNER_OS: ${{ runner.os }}
+        DAIS_RUNNER_ARCH: ${{ runner.arch }}
+      run: |
+        set -euo pipefail
+        test "$DAIS_RUNNER_OS" = Linux || { echo "P-050 released runtime supports Linux only" >&2; exit 2; }
+        test "$DAIS_RUNNER_ARCH" = X64 || { echo "P-050 released runtime supports x64 only" >&2; exit 2; }
+        python - <<'PY'
+        import platform, sys
+        assert sys.version_info[:2] == (3, 12), f"P-050 released runtime requires CPython 3.12, got {sys.version}"
+        assert platform.python_implementation() == "CPython"
+        print("P050_RUNTIME_SCOPE=LINUX_X64_CPYTHON_3_12")
+        PY
+
+    - name: Install hash-locked validation runtime
+      shell: bash
+      run: |
+        set -euo pipefail
+        LOCK="${{ github.action_path }}/requirements-linux-x64-py312.lock"
+        python -m pip install --disable-pip-version-check --no-input --only-binary=:all: --require-hashes -r "$LOCK"
+        python - <<'PY'
+        import importlib.metadata as md
+        expected = {
+            "jsonschema": "4.26.0",
+            "attrs": "25.3.0",
+            "jsonschema-specifications": "2025.9.1",
+            "referencing": "0.37.0",
+            "rpds-py": "0.27.1",
+        }
+        observed = {name: md.version(name) for name in expected}
+        assert observed == expected, (observed, expected)
+        print("P050_RUNTIME_VERSION_LOCK=PASS")
+        PY
 
     - name: Validate evidence and publish bounded outputs
       id: validate
@@ -69,7 +101,6 @@ runs:
         python - "$REPORT" "$GITHUB_OUTPUT" "$GITHUB_WORKSPACE" <<'PY'
         import hashlib
         import json
-        import os
         import sys
         from pathlib import Path
 
