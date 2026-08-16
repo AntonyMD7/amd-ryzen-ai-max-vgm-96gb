@@ -59,10 +59,10 @@ jobs:
           print('P058_V0120_EXACT_SOURCE_RETAINED=PASS')
           print('ROADMAP_COMPLETION_PROMOTED=FALSE')
           PY
-      - name: Re-run v0.12.0 adversarial tests
+      - name: Re-run v0.12.0 adversarial tests without network dependency installation
         run: |
           set -euo pipefail
-          python -m pytest -q tests/test_p058_dangerous_script_detector.py
+          python tests/test_p058_dangerous_script_detector.py
       - name: Re-verify exact-main source acceptance evidence
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,8 +74,7 @@ jobs:
           import json
           from pathlib import Path
           run=json.loads(Path('p058-v0120-source-run.json').read_text())
-          assert run['conclusion']=='success'
-          assert run['head_sha']=='5ba437c2d39e60d59df43fe356b3727ea3ba319a'
+          assert run['conclusion']=='success' and run['head_sha']=='5ba437c2d39e60d59df43fe356b3727ea3ba319a'
           arts=json.loads(Path('p058-v0120-source-artifacts.json').read_text())['artifacts']
           found={a['name']:(str(a['id']),a.get('digest')) for a in arts}
           assert found.get('p058-dangerous-script-31947900033')==('9263811361','sha256:ac7c01968c1a299dd0a3f5cc50e14689df241f43c752fd0891f25e1626ef66a4')
@@ -97,8 +96,7 @@ jobs:
           python - <<'PY'
           import json
           d=json.load(open('p058-v0120-release-plan-evidence.json'))
-          assert d['mode']=='PLAN_ONLY' and d['published'] is False
-          assert d['roadmap_completion_promoted'] is False
+          assert d['mode']=='PLAN_ONLY' and d['published'] is False and d['roadmap_completion_promoted'] is False
           print('P058_V0120_RELEASE_PLAN=PASS')
           PY
       - name: Retain sanitized release-plan evidence
