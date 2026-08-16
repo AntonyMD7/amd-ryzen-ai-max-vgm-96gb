@@ -7,7 +7,7 @@ inputs:
     description: Repository-relative path to the reviewed governed-release manifest.
     required: true
   publish:
-    description: Set to true only in a trusted push workflow with contents: write.
+    description: 'Set to true only in a trusted push workflow with contents: write.'
     required: false
     default: 'false'
   allowed-ref:
