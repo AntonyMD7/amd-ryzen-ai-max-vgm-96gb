@@ -1,0 +1,68 @@
+name: P-048 Broken Link Scanner support
+description: Report a reproducible problem with the public broken-link scanner without exposing private URLs or credentials.
+title: "[P-048] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve P-048. **Do not paste tokens, credentials, private/intranet URLs, cloud metadata addresses, proprietary documentation, or unredacted workflow secrets into this public issue.**
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem is this?
+      options:
+        - Public link reported broken but works from a normal browser
+        - Broken public link was not detected
+        - Local relative link behavior
+        - Preflight safety refusal
+        - Installation or Action loading
+        - Documentation or usability
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: release
+    attributes:
+      label: Released Action ref
+      description: For example v0.5.0. Do not paste credentials or private repository URLs.
+      placeholder: v0.5.0
+    validations:
+      required: true
+
+  - type: input
+    id: runner
+    attributes:
+      label: GitHub-hosted runner image
+      description: P-048 v0.5.0 supports GitHub-hosted Linux x64 only.
+      placeholder: ubuntu-24.04
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Sanitized reproduction
+      description: Describe the file type and behavior. Replace any sensitive hostname/path/query value with a clearly fake public example.
+      placeholder: A Markdown file containing https://example.com/missing is reported as ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Public-data confirmation
+      options:
+        - label: I removed credentials, private/internal URLs, proprietary content, personal data, and secret values from this report.
+          required: true
+        - label: I understand that P-048 intentionally refuses self-hosted/private-network scanning and will not request weakening that boundary as a workaround.
+          required: true
