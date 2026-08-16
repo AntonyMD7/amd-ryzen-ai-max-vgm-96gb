@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "release_id": "DAIS-P058-DANGEROUS-SCRIPT-V0.12.0",
+  "roadmap_ids": [
+    "P-058"
+  ],
+  "version": "v0.12.0",
+  "tag": "v0.12.0",
+  "release_title": "DAIS Dangerous Script Detector v0.12.0",
+  "release_notes_path": "docs/P058-RELEASE-NOTES-v0.12.0.md",
+  "target_repository": "AntonyMD7/amd-ryzen-ai-max-vgm-96gb",
+  "source_branch": "main",
+  "source_commit": "5ba437c2d39e60d59df43fe356b3727ea3ba319a",
+  "previous_release_ref": "v0.11.1",
+  "source_diff_base_ref": "v0.11.1",
+  "inclusion_hash_algorithm": "SHA-256",
+  "required_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    ".github/actions/dangerous-script-detector/action.yml",
+    ".github/actions/dangerous-script-detector/detect.py",
+    ".github/workflows/p058-dangerous-script-detector.yml",
+    ".github/ISSUE_TEMPLATE/p058-dangerous-script.yml",
+    "docs/P058-DANGEROUS-SCRIPT-START-HERE.md",
+    "docs/P058-DANGEROUS-SCRIPT-DETECTOR.md",
+    "docs/P058-RELEASE-NOTES-v0.12.0.md",
+    "tests/test_p058_dangerous_script_detector.py"
+  ],
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "make_latest": true,
+  "roadmap_completion_on_publish": false,
+  "verify_public_tag_exact": true,
+  "recovery": {
+    "delete_draft_before_publish": true,
+    "delete_published_release": false,
+    "delete_tag": false
+  }
+}
