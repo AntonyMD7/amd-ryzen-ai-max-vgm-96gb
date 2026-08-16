@@ -220,16 +220,22 @@ def render_guide(report: dict[str, Any]) -> str:
 
 def write_outputs(report: dict[str, Any], out_dir: Path, root: Path) -> tuple[Path, Path]:
     safe_root = _safe_root(root)
-    out_dir = out_dir.expanduser().resolve()
+    raw_out = out_dir.expanduser()
+    if raw_out.exists() and raw_out.is_symlink():
+        raise AuditError("output directory must not be a symlink")
+    resolved_out = raw_out.resolve()
     try:
-        out_dir.relative_to(safe_root)
+        resolved_out.relative_to(safe_root)
     except ValueError:
         pass
     else:
         raise AuditError("output directory must be outside the audited repository")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    if out_dir.is_symlink():
+    raw_out.mkdir(parents=True, exist_ok=True)
+    if raw_out.is_symlink():
         raise AuditError("output directory must not be a symlink")
+    out_dir = raw_out.resolve(strict=True)
+    if out_dir != resolved_out or not out_dir.is_dir():
+        raise AuditError("output directory identity changed during validation")
     report_path = out_dir / "p054-onboarding-report.json"
     guide_path = out_dir / "p054-onboarding-guide.md"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
