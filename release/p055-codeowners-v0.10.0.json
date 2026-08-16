@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "release_id": "DAIS-P055-CODEOWNERS-V0.10.0",
+  "roadmap_ids": ["P-055"],
+  "tag": "v0.10.0",
+  "title": "DAIS CODEOWNERS Assistant v0.10.0",
+  "source_commit": "0615eaba32c9fe15a95230f61947694341cc4f89",
+  "notes_file": "docs/P055-RELEASE-NOTES-v0.10.0.md",
+  "required_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    ".github/actions/codeowners-assistant/action.yml",
+    "scripts/p055_codeowners_assistant.py",
+    ".github/workflows/p055-codeowners-assistant.yml",
+    ".github/ISSUE_TEMPLATE/p055-codeowners-assistant.yml",
+    "docs/P055-CODEOWNERS-START-HERE.md",
+    "docs/P055-CODEOWNERS-ASSISTANT.md",
+    "docs/P055-RELEASE-NOTES-v0.10.0.md",
+    "tests/test_p055_codeowners_assistant.py"
+  ],
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "post_publish_exact_tag_verification_required": true,
+  "roadmap_completion_on_publish": false,
+  "make_latest": true
+}
