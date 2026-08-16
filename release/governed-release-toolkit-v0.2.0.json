@@ -4,7 +4,7 @@
   "roadmap_ids": ["P-051", "P-057"],
   "tag": "v0.2.0",
   "title": "DAIS Governed Release Toolkit v0.2.0",
-  "source_commit": "2899b6f23dfa039cbb78f7afb50fab57e8fa6581",
+  "source_commit": "76dfeb5b9411c73e57e10bd6611a92da8b61b421",
   "notes_file": "RELEASE-NOTES-v0.2.0.md",
   "required_files": [
     "README.md",
@@ -19,6 +19,7 @@
     "scripts/governed_release_manifest.py",
     "scripts/governed_release_publish.py",
     "tests/test_governed_release_toolkit.py",
+    "tests/test_governed_release_manifest_paths.py",
     "RELEASE-NOTES-v0.2.0.md"
   ],
   "publication_mode": "DRAFT_THEN_PUBLISH",
