@@ -1,0 +1,111 @@
+name: DAIS License Compliance Checker
+description: Read-only, privacy-minimized REUSE 6.2.0 compliance evidence without legal or compatibility overclaims.
+inputs:
+  root:
+    description: Repository checkout root to audit.
+    required: false
+    default: .
+  language:
+    description: Guidance language (en or es).
+    required: false
+    default: en
+  source-revision:
+    description: Optional exact 40-character Git commit of the audited snapshot; use unknown when not applicable.
+    required: false
+    default: unknown
+outputs:
+  status:
+    description: REUSE_COMPLIANT or REUSE_NONCOMPLIANT for the exact audited snapshot.
+    value: ${{ steps.audit.outputs.status }}
+  compliant:
+    description: Whether pinned REUSE 6.2.0 reports REUSE Specification 3.3 compliance.
+    value: ${{ steps.audit.outputs.compliant }}
+  reuse-tool-version:
+    description: Exact REUSE tool version observed.
+    value: ${{ steps.audit.outputs.reuse-tool-version }}
+  reuse-spec-version:
+    description: Exact REUSE Specification version reported by the tool.
+    value: ${{ steps.audit.outputs.reuse-spec-version }}
+  dependency-environment-sha256:
+    description: SHA-256 of sorted pip freeze for the resolved temporary REUSE environment.
+    value: ${{ steps.install.outputs.dependency-environment-sha256 }}
+  report-sha256:
+    description: SHA-256 of deterministic privacy-minimized DAIS evidence.
+    value: ${{ steps.audit.outputs.report-sha256 }}
+  report-path:
+    description: Runner-temporary sanitized JSON evidence path.
+    value: ${{ steps.audit.outputs.report-path }}
+  guide-path:
+    description: Runner-temporary beginner guidance path.
+    value: ${{ steps.audit.outputs.guide-path }}
+  raw-report-path:
+    description: Runner-temporary raw REUSE JSON. May contain repository-relative paths; do not publish blindly.
+    value: ${{ steps.audit.outputs.raw-report-path }}
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        P056_REUSE_VERSION: '6.2.0'
+      run: |
+        set -euo pipefail
+        venv="${RUNNER_TEMP}/p056-reuse-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}-${GITHUB_ACTION:-action}"
+        rm -rf "$venv"
+        python3 -m venv "$venv"
+        "$venv/bin/python" -m pip install --disable-pip-version-check --no-input "reuse==${P056_REUSE_VERSION}"
+        actual="$("$venv/bin/reuse" --version 2>&1)"
+        printf '%s\n' "$actual" | grep -Eq '(^|[^0-9])6\.2\.0([^0-9]|$)'
+        "$venv/bin/python" -m pip freeze --all | LC_ALL=C sort > "$venv/p056-resolved-environment.txt"
+        dependency_sha="$(sha256sum "$venv/p056-resolved-environment.txt" | awk '{print $1}')"
+        test "${#dependency_sha}" -eq 64
+        {
+          echo "reuse-bin=$venv/bin/reuse"
+          echo "python-bin=$venv/bin/python"
+          echo "dependency-environment-sha256=$dependency_sha"
+        } >> "$GITHUB_OUTPUT"
+    - id: audit
+      shell: bash
+      env:
+        P056_ROOT: ${{ inputs.root }}
+        P056_LANGUAGE: ${{ inputs.language }}
+        P056_SOURCE_REVISION: ${{ inputs.source-revision }}
+        P056_REUSE_BIN: ${{ steps.install.outputs.reuse-bin }}
+        P056_PYTHON_BIN: ${{ steps.install.outputs.python-bin }}
+        P056_DEPENDENCY_SHA: ${{ steps.install.outputs.dependency-environment-sha256 }}
+      run: |
+        set -euo pipefail
+        case "$P056_LANGUAGE" in
+          en|es) ;;
+          *) echo "Unsupported P-056 language" >&2; exit 2 ;;
+        esac
+        out="${RUNNER_TEMP}/p056-license-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}-${P056_LANGUAGE}-${GITHUB_ACTION:-action}"
+        rm -rf "$out"
+        mkdir -p "$out"
+        revision="$P056_SOURCE_REVISION"
+        if [[ "$revision" == "unknown" && "$P056_ROOT" == "." && "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
+          revision="$GITHUB_SHA"
+        fi
+        result="$("$P056_PYTHON_BIN" "${GITHUB_ACTION_PATH}/../../../scripts/p056_license_compliance.py" \
+          --root "$P056_ROOT" \
+          --reuse-bin "$P056_REUSE_BIN" \
+          --out-dir "$out" \
+          --language "$P056_LANGUAGE" \
+          --source-revision "$revision" \
+          --dependency-lock-sha256 "$P056_DEPENDENCY_SHA" \
+          --expected-reuse-version '6.2.0')"
+        RESULT="$result" python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import json, os
+        d=json.loads(os.environ['RESULT'])
+        print(f"status={d['status']}")
+        print(f"compliant={d['compliant']}")
+        print(f"reuse-tool-version={d['reuse_tool_version']}")
+        print(f"reuse-spec-version={d['reuse_spec_version']}")
+        print(f"report-sha256={d['report_sha256']}")
+        print(f"report-path={d['report_path']}")
+        print(f"guide-path={d['guide_path']}")
+        print(f"raw-report-path={d['raw_report_path']}")
+        PY
+        if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+          cat "$out/p056-license-guide.md" >> "$GITHUB_STEP_SUMMARY"
+        fi

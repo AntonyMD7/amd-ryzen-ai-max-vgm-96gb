@@ -1,0 +1,53 @@
+name: P-056 License Compliance Checker support
+description: Report a reproducible P-056 audit problem without publishing private repository or legal material.
+title: "[P-056] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        P-056 reports what pinned REUSE 6.2.0 says about REUSE Specification 3.3 metadata. It is not legal advice or a license-compatibility decision. Do not paste credentials, private source, private filenames, copyright identities, raw private REUSE reports, contracts, or confidential legal advice.
+  - type: dropdown
+    id: category
+    attributes:
+      label: Problem category
+      options:
+        - Unexpected REUSE_COMPLIANT result
+        - Unexpected REUSE_NONCOMPLIANT result
+        - REUSE tool/spec version mismatch
+        - GitHub Action integration
+        - Sanitized evidence/privacy boundary
+        - English/Spanish guide
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: P-056 version or commit
+      placeholder: v0.11.0 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: status
+    attributes:
+      label: Sanitized status
+      placeholder: REUSE_COMPLIANT / REUSE_NONCOMPLIANT / P056_INPUT_ERROR
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal sanitized reproduction
+      description: Use a synthetic public fixture when possible. Share category counts/digests, not confidential file paths or copyright identities.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy and claim confirmation
+      options:
+        - label: I removed credentials, private source, confidential paths, personal copyright identities, contracts, raw private reports, and legal advice.
+          required: true
+        - label: I understand REUSE compliance does not establish legal permission, license compatibility, dependency-license safety, or distribution approval.
+          required: true
