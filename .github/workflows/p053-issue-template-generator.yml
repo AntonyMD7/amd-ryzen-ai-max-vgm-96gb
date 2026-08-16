@@ -1,0 +1,129 @@
+name: P-053 Issue Template Generator acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/issue_template_generator.py'
+      - '.github/actions/issue-template-generator/**'
+      - '.github/workflows/p053-issue-template-generator.yml'
+      - 'tests/test_p053_issue_template_generator.py'
+      - 'examples/p053-issue-form-spec.json'
+      - 'docs/P053-ISSUE-TEMPLATE-GENERATOR-*.md'
+      - '.github/ISSUE_TEMPLATE/p053-issue-template-generator.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/issue_template_generator.py'
+      - '.github/actions/issue-template-generator/**'
+      - '.github/workflows/p053-issue-template-generator.yml'
+      - 'tests/test_p053_issue_template_generator.py'
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install test-only parser dependencies
+        run: python -m pip install --disable-pip-version-check 'pytest>=8,<9' 'PyYAML>=6.0,<7'
+
+      - name: Run P-053 adversarial unit tests
+        run: python -m pytest -q tests/test_p053_issue_template_generator.py
+
+      - name: Load real composite Action against sanitized example
+        id: generate
+        uses: ./.github/actions/issue-template-generator
+        with:
+          spec-json: >-
+            {"name":"Bug report","description":"Report a reproducible public bug","kind":"bug","title_prefix":"[BUG]","project_context":"this public open-source project","include_environment":true}
+
+      - name: Verify generated YAML syntax, bounded schema subset, privacy and determinism
+        env:
+          OUT: ${{ steps.generate.outputs.output-directory }}
+          DIGEST: ${{ steps.generate.outputs.bundle-sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          test -f "$OUT/dais-support.yml"
+          test -f "$OUT/config.yml"
+          test "$(find "$OUT" -maxdepth 1 -type f | wc -l)" = 2
+          python3 - "$OUT" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          import yaml
+          out=Path(sys.argv[1])
+          form=yaml.safe_load((out/'dais-support.yml').read_text(encoding='utf-8'))
+          cfg=yaml.safe_load((out/'config.yml').read_text(encoding='utf-8'))
+          assert set(form)=={'name','description','title','body'}
+          assert isinstance(form['body'], list) and form['body']
+          assert form['body'][0]['type']=='markdown'
+          privacy=[x for x in form['body'] if x.get('id')=='privacy']
+          assert len(privacy)==1 and privacy[0]['type']=='checkboxes'
+          assert all(o.get('required') is True for o in privacy[0]['attributes']['options'])
+          assert cfg=={'blank_issues_enabled':False,'contact_links':[]}
+          assert all('projects' not in x for x in form['body'])
+          assert 'assignees' not in form and 'labels' not in form
+          print('P053_YAML_SYNTAX=PASS')
+          print('P053_PRIVACY_CONFIRMATION=PASS')
+          print('P053_REPOSITORY_MUTATION=NO')
+          print('P053_GITHUB_SCHEMA_OFFICIALLY_VALIDATED=FALSE')
+          PY
+
+      - name: Re-run CLI generation and require identical bundle digest
+        env:
+          ACTION_DIGEST: ${{ steps.generate.outputs.bundle-sha256 }}
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          result="$(python scripts/issue_template_generator.py examples/p053-issue-form-spec.json --output "$tmp/out")"
+          cli_digest="$(printf '%s\n' "$result" | sed -n 's/^P053_BUNDLE_SHA256=//p')"
+          test "$cli_digest" = "$ACTION_DIGEST"
+          cp "$tmp/out/dais-support.yml" p053-generated-form.yml
+          cp "$tmp/out/config.yml" p053-generated-config.yml
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          evidence={
+            'schema_version':'0.1',
+            'roadmap_id':'P-053',
+            'tool_version':'0.8.0',
+            'source_commit':os.environ['GITHUB_SHA'],
+            'runner_scope':'github-hosted-ubuntu-24.04',
+            'bundle_sha256':os.environ['ACTION_DIGEST'],
+            'action_cli_determinism':'PASS',
+            'yaml_syntax_parse':'PASS',
+            'bounded_structure':'PASS',
+            'privacy_controls':'PASS',
+            'network_request_performed':False,
+            'repository_mutation_performed':False,
+            'github_schema_officially_validated':False,
+            'roadmap_completion_claimed':False,
+          }
+          Path('p053-hosted-acceptance.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          print('P053_ACTION_CLI_DETERMINISM=PASS')
+          print('ROADMAP_COMPLETION_CLAIMED=FALSE')
+          PY
+
+      - name: Retain sanitized P-053 generated artifacts and evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p053-issue-template-acceptance-${{ github.run_id }}
+          path: |
+            p053-generated-form.yml
+            p053-generated-config.yml
+            p053-hosted-acceptance.json
+          retention-days: 14
+          if-no-files-found: error
