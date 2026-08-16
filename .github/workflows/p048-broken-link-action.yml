@@ -1,0 +1,204 @@
+name: P-048 Broken Link Scanner Action acceptance
+
+on:
+  pull_request:
+    paths:
+      - '.github/actions/broken-link-scan/**'
+      - '.github/workflows/p048-broken-link-action.yml'
+      - 'tests/test_p048_broken_link_action.py'
+      - 'docs/P048-BROKEN-LINK-SCANNER-START-HERE.md'
+      - 'docs/P048-BROKEN-LINK-SCANNER-ACTION.md'
+      - 'docs/P048-RELEASE-NOTES-v0.5.0.md'
+      - '.github/ISSUE_TEMPLATE/p048-broken-link-scanner.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/actions/broken-link-scan/**'
+      - '.github/workflows/p048-broken-link-action.yml'
+      - 'tests/test_p048_broken_link_action.py'
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Run P-048 adversarial contract tests
+        run: |
+          set -euo pipefail
+          python tests/test_p048_broken_link_action.py
+
+      - name: Create disposable acceptance fixtures
+        run: |
+          set -euo pipefail
+          mkdir -p .p048-fixtures/pass .p048-fixtures/broken .p048-fixtures/loopback .p048-fixtures/metadata .p048-fixtures/credentials .p048-fixtures/empty
+          cat > .p048-fixtures/pass/README.md <<'EOF'
+          # P-048 Public Fixture
+
+          [Local guide](./guide.md)
+
+          [Lychee project](https://github.com/lycheeverse/lychee)
+          EOF
+          cat > .p048-fixtures/pass/guide.md <<'EOF'
+          # Guide
+
+          This is a local-link fixture.
+          EOF
+          cat > .p048-fixtures/broken/README.md <<'EOF'
+          # Broken Fixture
+
+          [Missing local reference](./does-not-exist.md)
+          EOF
+          cat > .p048-fixtures/loopback/README.md <<'EOF'
+          # Unsafe Fixture
+
+          http://127.0.0.1:9/admin
+          EOF
+          cat > .p048-fixtures/metadata/README.md <<'EOF'
+          # Metadata Fixture
+
+          http://169.254.169.254/latest/meta-data/
+          EOF
+          cat > .p048-fixtures/credentials/README.md <<'EOF'
+          # Credential Fixture
+
+          https://user:password@example.org/private
+          EOF
+          sha256sum .p048-fixtures/pass/README.md .p048-fixtures/pass/guide.md > /tmp/p048-before.sha256
+
+      - name: Require valid public links and machine outputs
+        id: good
+        uses: ./.github/actions/broken-link-scan
+        with:
+          root: .p048-fixtures/pass
+
+      - name: Verify positive result and no input mutation
+        env:
+          STATUS: ${{ steps.good.outputs.status }}
+          DOCUMENT_COUNT: ${{ steps.good.outputs.document-count }}
+          ABSOLUTE_URL_COUNT: ${{ steps.good.outputs.absolute-url-count }}
+          RESULT_FILE: ${{ steps.good.outputs.result-file }}
+          RESULT_SHA256: ${{ steps.good.outputs.result-sha256 }}
+          LYCHEE_VERSION: ${{ steps.good.outputs.lychee-version }}
+        run: |
+          set -euo pipefail
+          sha256sum --check /tmp/p048-before.sha256
+          test "$STATUS" = PASS
+          test "$DOCUMENT_COUNT" = 2
+          test "$ABSOLUTE_URL_COUNT" = 1
+          test "$LYCHEE_VERSION" = 0.24.2
+          test "$(sha256sum "$RESULT_FILE" | awk '{print $1}')" = "$RESULT_SHA256"
+          python - "$RESULT_FILE" <<'PY'
+          import json, sys
+          from pathlib import Path
+          data = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          assert data['status'] == 'PASS'
+          assert data['raw_report_retained'] is False
+          assert data['full_urls_retained'] is False
+          assert data['private_address_requests_allowed'] is False
+          assert data['claims']['documentation_correctness'] is False
+          print('P048_SANITIZED_POSITIVE_RESULT=PASS')
+          PY
+          cp "$RESULT_FILE" p048-hosted-acceptance.json
+          echo 'P048_INPUT_MUTATION=NO'
+
+      - name: Require broken local reference failure
+        id: broken
+        continue-on-error: true
+        uses: ./.github/actions/broken-link-scan
+        with:
+          root: .p048-fixtures/broken
+
+      - name: Require loopback refusal before scanning
+        id: loopback
+        continue-on-error: true
+        uses: ./.github/actions/broken-link-scan
+        with:
+          root: .p048-fixtures/loopback
+
+      - name: Require cloud metadata refusal before scanning
+        id: metadata
+        continue-on-error: true
+        uses: ./.github/actions/broken-link-scan
+        with:
+          root: .p048-fixtures/metadata
+
+      - name: Require embedded-credential refusal
+        id: credentials
+        continue-on-error: true
+        uses: ./.github/actions/broken-link-scan
+        with:
+          root: .p048-fixtures/credentials
+
+      - name: Require empty-scope refusal
+        id: empty
+        continue-on-error: true
+        uses: ./.github/actions/broken-link-scan
+        with:
+          root: .p048-fixtures/empty
+
+      - name: Require traversal refusal
+        id: traversal
+        continue-on-error: true
+        uses: ./.github/actions/broken-link-scan
+        with:
+          root: ../outside
+
+      - name: Assert negative controls fail closed
+        env:
+          BROKEN: ${{ steps.broken.outcome }}
+          LOOPBACK: ${{ steps.loopback.outcome }}
+          METADATA: ${{ steps.metadata.outcome }}
+          CREDENTIALS: ${{ steps.credentials.outcome }}
+          EMPTY: ${{ steps.empty.outcome }}
+          TRAVERSAL: ${{ steps.traversal.outcome }}
+        run: |
+          set -euo pipefail
+          test "$BROKEN" = failure
+          test "$LOOPBACK" = failure
+          test "$METADATA" = failure
+          test "$CREDENTIALS" = failure
+          test "$EMPTY" = failure
+          test "$TRAVERSAL" = failure
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          result = json.loads(Path('p048-hosted-acceptance.json').read_text(encoding='utf-8'))
+          result['acceptance'] = {
+              'broken_local_reference': os.environ['BROKEN'],
+              'loopback_ssrf_negative_control': os.environ['LOOPBACK'],
+              'cloud_metadata_ssrf_negative_control': os.environ['METADATA'],
+              'embedded_credential_negative_control': os.environ['CREDENTIALS'],
+              'empty_scope_negative_control': os.environ['EMPTY'],
+              'traversal_negative_control': os.environ['TRAVERSAL'],
+              'input_mutation_performed': False,
+              'github_permissions': 'contents:read',
+              'runner_scope': 'github-hosted-linux-x64',
+              'lychee_version': '0.24.2',
+              'lychee_linux_x64_archive_sha256': '1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a',
+              'roadmap_completion_claimed': False,
+          }
+          Path('p048-hosted-acceptance.json').write_text(json.dumps(result, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          print('P048_NEGATIVE_CONTROLS=PASS')
+          print('ROADMAP_COMPLETION_CLAIMED=FALSE')
+          PY
+
+      - name: Retain sanitized P-048 acceptance evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p048-broken-link-acceptance-${{ github.run_id }}
+          path: p048-hosted-acceptance.json
+          retention-days: 14
+          if-no-files-found: error
