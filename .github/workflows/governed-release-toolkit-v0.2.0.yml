@@ -75,11 +75,15 @@ jobs:
           import json
           from pathlib import Path
           d = json.loads(Path('governed-release-toolkit-plan-evidence.json').read_text(encoding='utf-8'))
-          assert d.get('release_created') is False
-          assert d.get('tag_created') is False
+          assert d.get('mode') == 'PLAN_ONLY'
+          assert d.get('status') == 'READY_FOR_TRUSTED_PUSH'
+          assert d.get('draft_created') is False
+          assert d.get('published') is False
+          assert d.get('exact_tag_target_verified') is False
           assert d.get('roadmap_completion_promoted') is False
           print('GENERIC_PLAN_ONLY_ACCEPTANCE=PASS')
-          print('RELEASE_CREATED=FALSE')
+          print('DRAFT_CREATED=FALSE')
+          print('PUBLISHED=FALSE')
           print('ROADMAP_COMPLETION_PROMOTED=FALSE')
           PY
 
@@ -127,7 +131,7 @@ jobs:
           title="$(python -c "import json;print(json.load(open('release/governed-release-toolkit-v0.2.0.json'))['title'])")"
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName,name,targetCommitish,url,publishedAt > governed-release-toolkit-public-release.json
           python - "$tag" "$source_commit" "$title" <<'PY'
-          import json, subprocess, sys
+          import json, os, subprocess, sys
           from pathlib import Path
           tag, source, title = sys.argv[1:]
           release = json.loads(Path('governed-release-toolkit-public-release.json').read_text(encoding='utf-8'))
@@ -135,7 +139,8 @@ jobs:
           assert release['tagName'] == tag
           assert release['name'] == title
           assert release['publishedAt']
-          subprocess.run(['git','fetch','--force',f'https://github.com/{__import__("os").environ["GITHUB_REPOSITORY"]}.git',f'refs/tags/{tag}:refs/tags/{tag}'], check=True)
+          remote = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}.git"
+          subprocess.run(['git','fetch','--force',remote,f'refs/tags/{tag}:refs/tags/{tag}'], check=True)
           resolved = subprocess.check_output(['git','rev-list','-n','1',tag], text=True).strip()
           assert resolved == source, (resolved, source)
           out = {
