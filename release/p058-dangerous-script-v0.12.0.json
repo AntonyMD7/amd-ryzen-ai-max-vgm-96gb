@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "release_id": "DAIS-P058-DANGEROUS-SCRIPT-V0.12.0",
+  "roadmap_ids": ["P-058"],
+  "tag": "v0.12.0",
+  "title": "DAIS Dangerous Script Detector v0.12.0",
+  "source_commit": "5ba437c2d39e60d59df43fe356b3727ea3ba319a",
+  "notes_file": "docs/P058-RELEASE-NOTES-v0.12.0.md",
+  "required_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    ".github/actions/dangerous-script-detector/action.yml",
+    ".github/actions/dangerous-script-detector/detect.py",
+    ".github/workflows/p058-dangerous-script-detector.yml",
+    ".github/ISSUE_TEMPLATE/p058-dangerous-script.yml",
+    "docs/P058-DANGEROUS-SCRIPT-START-HERE.md",
+    "docs/P058-DANGEROUS-SCRIPT-DETECTOR.md",
+    "docs/P058-RELEASE-NOTES-v0.12.0.md",
+    "tests/test_p058_dangerous_script_detector.py"
+  ],
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "post_publish_exact_tag_verification_required": true,
+  "roadmap_completion_on_publish": false,
+  "make_latest": true
+}
