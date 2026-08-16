@@ -30,8 +30,11 @@ outputs:
     description: SHA-256 of sorted pip freeze for the resolved temporary REUSE environment.
     value: ${{ steps.install.outputs.dependency-environment-sha256 }}
   report-sha256:
-    description: SHA-256 of deterministic privacy-minimized DAIS evidence.
+    description: SHA-256 of deterministic privacy-minimized DAIS semantic evidence.
     value: ${{ steps.audit.outputs.report-sha256 }}
+  raw-report-sha256:
+    description: Per-run SHA-256 of exact raw REUSE JSON bytes; intentionally excluded from deterministic report identity.
+    value: ${{ steps.audit.outputs.raw-report-sha256 }}
   report-path:
     description: Runner-temporary sanitized JSON evidence path.
     value: ${{ steps.audit.outputs.report-path }}
@@ -86,7 +89,7 @@ runs:
         if [[ "$revision" == "unknown" && "$P056_ROOT" == "." && "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ ]]; then
           revision="$GITHUB_SHA"
         fi
-        result="$("$P056_PYTHON_BIN" "${GITHUB_ACTION_PATH}/../../../scripts/p056_license_compliance.py" \
+        result="$("$P056_PYTHON_BIN" "${GITHUB_ACTION_PATH}/../../../scripts/p056_license_compliance_v0111.py" \
           --root "$P056_ROOT" \
           --reuse-bin "$P056_REUSE_BIN" \
           --out-dir "$out" \
@@ -102,6 +105,7 @@ runs:
         print(f"reuse-tool-version={d['reuse_tool_version']}")
         print(f"reuse-spec-version={d['reuse_spec_version']}")
         print(f"report-sha256={d['report_sha256']}")
+        print(f"raw-report-sha256={d['raw_report_sha256']}")
         print(f"report-path={d['report_path']}")
         print(f"guide-path={d['guide_path']}")
         print(f"raw-report-path={d['raw_report_path']}")
