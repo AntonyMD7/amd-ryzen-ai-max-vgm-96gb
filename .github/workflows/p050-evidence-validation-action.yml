@@ -51,7 +51,6 @@ jobs:
           mkdir -p "$RUNNER_TEMP/p050-artifacts"
           printf 'P-050 public acceptance fixture\n' > "$RUNNER_TEMP/p050-artifacts/result.txt"
           python - "$RUNNER_TEMP/p050-artifacts/result.txt" "$RUNNER_TEMP/p050-valid.json" <<'PY'
-          import copy
           import hashlib
           import json
           import sys
@@ -131,3 +130,85 @@ jobs:
           echo 'CLAIMED_EVENT_PROVEN=FALSE'
           echo 'PRODUCER_IDENTITY_VERIFIED=FALSE'
           echo 'ROADMAP_COMPLETION_CLAIMED=FALSE'
+
+  attestation-interop:
+    name: GitHub signed-attestation interoperability
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+
+      - name: Set up exact supported Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create a real validator report through P-050
+        id: p050
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p050-attest-artifacts"
+          printf 'P-050 attestation interoperability fixture\n' > "$RUNNER_TEMP/p050-attest-artifacts/result.txt"
+          python - "$RUNNER_TEMP/p050-attest-artifacts/result.txt" "$RUNNER_TEMP/p050-attest-evidence.json" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          artifact = Path(sys.argv[1])
+          record = json.loads(Path('examples/universal-evidence-readonly-example.json').read_text(encoding='utf-8'))
+          record['artifacts'] = [{
+              'name': 'result.txt',
+              'sha256': hashlib.sha256(artifact.read_bytes()).hexdigest(),
+              'media_type': 'text/plain',
+          }]
+          Path(sys.argv[2]).write_text(json.dumps(record, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Validate before signing provenance
+        id: validate
+        uses: ./.github/actions/evidence-validate
+        with:
+          evidence: ${{ runner.temp }}/p050-attest-evidence.json
+          artifact-root: ${{ runner.temp }}/p050-attest-artifacts
+          max-artifacts: '8'
+          max-artifact-bytes: '1048576'
+
+      - name: Materialize exact validated report in workspace
+        env:
+          REPORT: ${{ steps.validate.outputs.report-path }}
+          REPORT_SHA: ${{ steps.validate.outputs.report-sha256 }}
+        run: |
+          set -euo pipefail
+          test "${{ steps.validate.outputs.status }}" = PASS
+          cp "$REPORT" p050-validation-report.json
+          printf '%s  %s\n' "$REPORT_SHA" p050-validation-report.json | sha256sum -c -
+
+      - name: Attest exact P-050 validation report
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d
+        with:
+          subject-path: p050-validation-report.json
+
+      - name: Independently verify GitHub attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh attestation verify p050-validation-report.json --repo "$GITHUB_REPOSITORY" > p050-attestation-verification.txt
+          grep -qi 'verification succeeded' p050-attestation-verification.txt || grep -qi 'attestation' p050-attestation-verification.txt
+          echo 'P050_GITHUB_ATTESTATION_INTEROP=PASS'
+          echo 'SCHEMA_HASH_VALIDATION_EQUALS_PRODUCER_AUTHENTICATION=FALSE'
+          echo 'ROADMAP_COMPLETION_CLAIMED=FALSE'
+
+      - name: Retain sanitized interoperability evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: p050-attestation-interop-${{ github.run_id }}
+          path: |
+            p050-validation-report.json
+            p050-attestation-verification.txt
+          retention-days: 30
+          if-no-files-found: error
