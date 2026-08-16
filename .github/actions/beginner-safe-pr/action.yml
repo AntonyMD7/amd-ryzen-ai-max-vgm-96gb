@@ -1,0 +1,93 @@
+name: DAIS Beginner-Safe PR Creator
+description: Plan or explicitly create a bounded same-repository draft pull request with a reviewed plan-hash lease.
+author: AntonyMD7
+inputs:
+  mode:
+    description: plan (network-free) or create (draft PR only)
+    required: false
+    default: plan
+  repository:
+    description: Exact owner/repository; create mode must equal github.repository
+    required: true
+  title:
+    description: Public pull-request title; secret-like values are refused
+    required: true
+  summary:
+    description: Public summary used in the generated PR body; secret-like values are refused
+    required: true
+  base:
+    description: Exact same-repository base branch
+    required: true
+  head:
+    description: Exact same-repository head branch; forks are outside v0.7.0 scope
+    required: true
+  tests-run:
+    description: Confirm documented tests were run
+    required: false
+    default: 'false'
+  ci-expected:
+    description: Confirm expected CI behavior was reviewed
+    required: false
+    default: 'false'
+  secrets-reviewed:
+    description: Confirm content was reviewed for accidental secret exposure
+    required: false
+    default: 'false'
+  scope-reviewed:
+    description: Confirm change scope is focused and understood
+    required: false
+    default: 'false'
+  rollback-considered:
+    description: Confirm rollback/recovery implications were considered
+    required: false
+    default: 'false'
+  expected-plan-sha256:
+    description: Exact plan-sha256 from a prior plan step; mandatory for create mode
+    required: false
+    default: ''
+  confirmation:
+    description: Must equal CREATE_DRAFT_PR in create mode
+    required: false
+    default: ''
+  github-token:
+    description: Repository-scoped token; required only in create mode and never emitted
+    required: false
+    default: ''
+outputs:
+  decision:
+    description: Plan decision or create status
+    value: ${{ steps.engine.outputs.decision }}
+  plan-sha256:
+    description: Deterministic SHA-256 lease for the exact reviewed PR plan
+    value: ${{ steps.engine.outputs.plan-sha256 }}
+  pr-number:
+    description: Draft PR number when created/reused
+    value: ${{ steps.engine.outputs.pr-number }}
+  pr-url:
+    description: Draft PR URL when created/reused
+    value: ${{ steps.engine.outputs.pr-url }}
+  created:
+    description: true only when this invocation created a new draft PR
+    value: ${{ steps.engine.outputs.created }}
+runs:
+  using: composite
+  steps:
+    - id: engine
+      name: Validate plan and enforce draft-only mutation boundary
+      shell: bash
+      env:
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
+        INPUT_BASE: ${{ inputs.base }}
+        INPUT_HEAD: ${{ inputs.head }}
+        INPUT_TESTS_RUN: ${{ inputs.tests-run }}
+        INPUT_CI_EXPECTED: ${{ inputs.ci-expected }}
+        INPUT_SECRETS_REVIEWED: ${{ inputs.secrets-reviewed }}
+        INPUT_SCOPE_REVIEWED: ${{ inputs.scope-reviewed }}
+        INPUT_ROLLBACK_CONSIDERED: ${{ inputs.rollback-considered }}
+        INPUT_EXPECTED_PLAN_SHA256: ${{ inputs.expected-plan-sha256 }}
+        INPUT_CONFIRMATION: ${{ inputs.confirmation }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: python3 "$GITHUB_ACTION_PATH/safe_pr.py"

@@ -1,0 +1,63 @@
+name: P-052 Beginner-Safe PR Creator support
+description: Report a reproducible P-052 behavior without posting tokens, private repository content, or personal data.
+title: '[P-052] '
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve P-052. **Do not paste GitHub tokens, secrets, private repository content, private URLs, personal data, or sensitive PR text.** Use synthetic/public examples only.
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - plan
+        - create
+        - documentation
+        - other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Product version/ref
+      placeholder: v0.7.0 or exact commit
+    validations:
+      required: true
+  - type: dropdown
+    id: event
+    attributes:
+      label: Workflow event class
+      description: Do not include repository secrets or private event payloads.
+      options:
+        - workflow_dispatch
+        - push
+        - pull_request
+        - pull_request_target (expected create refusal)
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: Describe the decision/status and expected behavior using sanitized values. Do not paste tokens or private PR content.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal sanitized reproduction
+      description: Use a public or synthetic owner/repository, branch names, title, and summary. Never paste a real credential.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I removed tokens, credentials, private repository content, personal data, and sensitive PR text from this report.
+          required: true
+        - label: I understand P-052 does not approve or merge pull requests and a draft PR remains subject to normal repository governance.
+          required: true
