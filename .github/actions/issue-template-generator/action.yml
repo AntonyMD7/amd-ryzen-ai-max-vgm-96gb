@@ -1,0 +1,37 @@
+name: DAIS Issue Template Generator
+description: Generate a bounded privacy-conscious GitHub Issue Form bundle without mutating the repository.
+author: AntonyMD7
+inputs:
+  spec-json:
+    description: Bounded JSON support-form specification; secret-like values are refused
+    required: true
+outputs:
+  output-directory:
+    description: Runner-temporary directory containing dais-support.yml and config.yml
+    value: ${{ steps.generate.outputs.output-directory }}
+  bundle-sha256:
+    description: Deterministic SHA-256 over exact generated filenames and contents
+    value: ${{ steps.generate.outputs.bundle-sha256 }}
+runs:
+  using: composite
+  steps:
+    - id: generate
+      name: Generate bounded Issue Form bundle
+      shell: bash
+      env:
+        P053_SPEC_JSON: ${{ inputs.spec-json }}
+      run: |
+        set -euo pipefail
+        root="$RUNNER_TEMP/dais-p053-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
+        rm -rf "$root"
+        mkdir -p "$root"
+        spec="$root/spec.json"
+        out="$root/generated"
+        printf '%s' "$P053_SPEC_JSON" > "$spec"
+        result="$(python3 "$GITHUB_ACTION_PATH/../../../scripts/issue_template_generator.py" "$spec" --output "$out")"
+        printf '%s\n' "$result"
+        digest="$(printf '%s\n' "$result" | sed -n 's/^P053_BUNDLE_SHA256=//p')"
+        [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+        rm -f "$spec"
+        echo "output-directory=$out" >> "$GITHUB_OUTPUT"
+        echo "bundle-sha256=$digest" >> "$GITHUB_OUTPUT"
