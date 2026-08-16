@@ -1,0 +1,8 @@
+{
+  "name": "Bug report",
+  "description": "Report a reproducible public bug",
+  "kind": "bug",
+  "title_prefix": "[BUG]",
+  "project_context": "this public open-source project",
+  "include_environment": true
+}
