@@ -12,7 +12,7 @@ P-058 deliberately composes with established analysis ecosystems instead of pret
 
 - **ShellCheck** remains the specialist static-analysis tool for shell correctness and includes security-relevant diagnostics such as unsafe filename injection.
 - **GitHub CodeQL** supports GitHub Actions plus major application languages, but its published supported-language list does not make POSIX shell a general CodeQL language.
-- **Semgrep** provides broad SAST capabilities and has Bash scanning support, but P-058 does not require a cloud account or arbitrary external rules.
+- **Semgrep** provides broad SAST capabilities and Bash scanning support, but P-058 does not require a cloud account or arbitrary external rules.
 
 The DAIS contribution is a transparent, dependency-light policy boundary for a narrow set of high-risk constructs, with deterministic privacy-minimized evidence and no execution authority.
 
@@ -76,6 +76,8 @@ Repository input is untrusted. P-058 therefore:
 - requires UTF-8 text and rejects NUL/binary candidates;
 - has no repository-supplied regex/rules configuration.
 
+GitHub workflow identity is evaluated relative to the repository workspace, not relative only to the caller-selected scan root. This matters when a consumer intentionally narrows `root` to `.github/workflows`: workflow YAML must remain workflow YAML rather than silently disappearing from the scan. A dedicated regression test preserves this boundary.
+
 ### No execution
 
 The detector uses Python standard-library file/regex/hash operations only. It does not import subprocess/socket/urllib/requests and does not call `os.system`.
@@ -94,6 +96,12 @@ A finding retains:
 - fixed rule rationale.
 
 It does not retain the path itself or line/match text. This reduces leakage if evidence is uploaded from a private repository.
+
+## Recursive red-team finding and permanent fix
+
+Post-productization review found a real classification defect: YAML recognition was originally computed relative to the selected scan root. A consumer scanning the repository root worked correctly, but a consumer narrowing the scan root to `.github/workflows` caused those same workflow files to lose their `.github/workflows/` identity and therefore be skipped. That is a dangerous false-negative shape because a valid containment feature could reduce security coverage.
+
+The permanent fix classifies GitHub workflow/action YAML against the resolved repository workspace while retaining the selected scan root only for containment and privacy-relative result hashing. The new regression test scans the same critical workflow through a `.github/workflows` subroot and requires the same `DS001` detection. No rule severity or fail gate was weakened to make the test pass.
 
 ## Accessibility and multilingual path
 
