@@ -1,90 +1,87 @@
-# Release Governance v0.2
+# Release Governance v0.3
 
-Status: **IN PROGRESS reference implementation**
+Status: **IN PROGRESS — reusable implementation built; dedicated release acceptance pending**
 
 Roadmap mapping: `P-051 Release Automation Action` and `P-057 Release Governance Tool`.
 
 ## Search-before-build decision
 
-GitHub already provides releases/tags, release APIs, artifact attestations and an immutable-release model. Established ecosystems such as Release Please and Changesets already address version/changelog/release workflows for common project/package patterns. DAIS should not build another generic release service.
+GitHub remains the tag/release system of record. Release Please already automates conventional-commit-driven release PRs, changelogs, tags and GitHub releases across many project types; Changesets already handles package/monorepo versioning and changelog intent. DAIS therefore does not build another package-versioning or changelog engine.
 
-The public-good gap addressed here is a **fail-closed release evidence contract** that refuses progression when trustworthy public-build completion evidence is missing and independently binds the candidate to the exact checked-out source revision.
+The public-good gap here is a **fail-closed final-publication evidence boundary**: bind an already-reviewed release to an exact commit, refuse untrusted execution contexts and existing identities, create a draft first, verify that draft, publish only after identity checks, verify the public tag target, retain sanitized evidence, and never infer project completion merely from publication.
 
-## Layer 1 — plan-only candidate gate
+## Implemented layers
 
-`scripts/release_governance.py` remains a pure planner. It accepts an explicit candidate record with:
+### 1. Plan-only candidate gate
 
-- semantic-version release tag;
-- exact 40-character source commit SHA;
-- public-project file presence;
-- CI/test/evidence/security/accessibility/recovery/release-note assertions;
-- artifact names and SHA-256 values;
-- optional request for GitHub artifact attestation.
+`scripts/release_governance.py` is the original pure planner. It never creates a tag/release and remains useful for early release planning.
 
-It emits `BLOCKED` or `READY_FOR_GOVERNED_RELEASE_WORKFLOW`. It never creates the tag or release. Caller-supplied booleans remain assertions and therefore are not sufficient by themselves for release admission.
+### 2. Completion-contract readiness
 
-## Layer 2 — independently verified release readiness
-
-`scripts/release_readiness_verify.py` and `.github/workflows/governed-release-readiness.yml` add a stronger read-only lane.
-
-The verifier:
-
-1. runs the canonical 19-gate completion-contract audit;
-2. requires the subject to remain `IN_PROGRESS` before release publication;
-3. requires all non-release completion gates to be satisfied;
-4. permits only the release-publication gate and final release-bound handover gate to remain blocking;
-5. binds the candidate tag to exact semantic-version syntax;
-6. binds the requested exact source commit to the actual checked-out Git `HEAD`;
-7. independently verifies the required public project files exist.
-
-A passing result is only:
+`scripts/release_readiness_verify.py` and `.github/workflows/governed-release-readiness.yml` bind a proposed release to the canonical 19-gate completion contract and exact checked-out source. Passing means only:
 
 ```text
 READY_FOR_GOVERNED_RELEASE_CREATION_REVIEW
 ```
 
-It is never treated as `RELEASED` or `COMPLETE`.
+### 3. Reusable generic manifest
 
-The hosted readiness workflow runs with only:
+`scripts/governed_release_manifest.py` validates a project-agnostic reviewed release manifest. It requires an exact 40-character source commit, semantic tag, bounded DAIS roadmap IDs, safe repository-relative paths, reviewed-file presence, draft-then-publish mode, post-publish exact tag verification, and the permanent rule `roadmap_completion_on_publish=false`.
 
-```yaml
-permissions:
-  contents: read
-```
+### 4. Reusable write-capable publisher
 
-It runs the release/completion contract tests and retains sanitized readiness evidence. It has no tag/release creation step and no write permission.
+`scripts/governed_release_publish.py` is plan-only unless `--execute` is explicitly supplied. Mutation additionally requires a GitHub Actions `push` event on the exact allowed ref and a token supplied only through `GH_TOKEN`.
 
-## Release creation remains a separate capability
+The publisher:
 
-The write-capable release step is intentionally not bundled into readiness. A future admitted implementation should:
+1. revalidates the manifest;
+2. proves the reviewed source is retained and ancestral to release-control `HEAD`;
+3. refuses an existing release or tag;
+4. creates a draft at the exact source commit;
+5. verifies draft tag/title/target identity;
+6. publishes the reviewed draft;
+7. queries the public release;
+8. requires the public tag to resolve exactly to the reviewed commit;
+9. writes sanitized evidence with `roadmap_completion_promoted=false`.
 
-1. consume a successful exact-commit readiness record;
-2. re-verify that the candidate commit is still the intended source;
-3. use least-privilege `contents: write` only for release creation, adding `id-token: write` / `attestations: write` only when the selected attestation path requires them;
-4. create a draft first when release immutability/assets sequencing makes that appropriate;
-5. build/attach assets from the exact source and retain digests/provenance;
-6. publish only after release notes/assets/evidence are complete;
-7. independently verify the published tag resolves to the intended commit and verify release assets/attestations where applicable;
-8. retain post-publication evidence and then update the release-bound canonical handover.
+If draft verification fails, the draft is deliberately left unpublished as a recovery point. The tool never moves/overwrites a tag to force success.
 
-## Beginner view
+### 5. Reusable GitHub composite Action
 
-> "Before publishing a release, DAIS checks that the project has the required documentation, tests, evidence, safety reviews and exact source version. If anything important is missing, it stops instead of publishing anyway. Passing the check still does not publish the release."
+`.github/actions/governed-release/action.yml` exposes the same contract for other repositories. `publish: false` is non-mutating. `publish: true` is intended only for a separately permissioned trusted push job with `contents: write`.
+
+Full operator, security, recovery, accessibility, multilingual and integration guidance is in `docs/GOVERNED-RELEASE-TOOLKIT.md`.
+
+## Real-world evidence already retained
+
+The earlier P-025 lane proved the core draft → verify → publish → exact-tag-verify lifecycle on a real public GitHub release (`v0.1.0`) without automatically promoting completion. That lane was intentionally project-specific. The current tranche generalizes the pattern and adds explicit untrusted-event refusal, reusable manifest semantics and recovery-state tests.
+
+That P-025 release is supporting evidence, not sufficient by itself to declare P-051/P-057 complete. The new generic action/toolkit must itself receive a versioned release and a real generic-path publication acceptance before final completion promotion.
 
 ## Security boundary
 
-The read-only readiness path:
+- no `pull_request_target` write lane;
+- PR validation remains read-only;
+- write capability requires exact trusted push context;
+- no generic shell executor;
+- no token is accepted in manifest/CLI arguments or retained evidence;
+- no existing release/tag overwrite;
+- no automatic roadmap-completion mutation;
+- path traversal/dot segments are rejected;
+- source commit must be exact, retained and ancestral;
+- draft identity is verified before publication;
+- public tag SHA is verified after publication.
 
-- never creates or moves a Git tag;
-- never creates/edits/publishes a release;
-- never uploads release assets;
-- never changes repository settings;
-- never changes roadmap completion state;
-- permits completion-record input only from a constrained public `examples/` basename;
-- retains no credential or private infrastructure data.
+## Accessibility and multilingual boundary
 
-The future write-capable path must receive a separate fork/untrusted-input threat review and failed-draft/retry/recovery acceptance before it is eligible for reuse.
+The product interface is text/JSON/YAML, supports keyboard/CLI operation, emits explicit machine-readable status, and includes a plain-language beginner path. GitHub UI conformance is not claimed. The contract is language-neutral; current operator documentation is English-first, so multilingual support is considered but not claimed as accepted.
 
 ## Completion gaps
 
-Both roadmap items remain **IN PROGRESS**. Completion still requires a reviewed reusable release-creation implementation or upstream integration, immutable-release/attestation acceptance on an appropriate public test release, independent post-publication verification, project-specific versioning adapters, fork/untrusted-input threat review for the write path, recovery from failed draft releases, accessibility/multilingual operator review, versioned release evidence and canonical completion records.
+P-051 and P-057 remain **IN PROGRESS** until the generic path has:
+
+1. green exact-head CI on the reusable implementation;
+2. a dedicated exact-source version/tag/release;
+3. a real public release executed through the generic action/publisher path;
+4. independent post-publication verification and retained sanitized evidence;
+5. final release-bound completion records and handover audited against all 19 canonical gates.
