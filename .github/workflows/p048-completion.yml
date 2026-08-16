@@ -1,0 +1,179 @@
+name: P-048 Broken Link Scanner completion audit
+
+on:
+  pull_request:
+    paths:
+      - 'examples/public-build-completion-p048-v0.5.0.json'
+      - 'docs/P048-COMPLETION-RECORD-v0.5.0.md'
+      - 'tests/test_p048_completion_record.py'
+      - '.github/workflows/p048-completion.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/public-build-completion-p048-v0.5.0.json'
+      - 'docs/P048-COMPLETION-RECORD-v0.5.0.md'
+      - 'tests/test_p048_completion_record.py'
+      - '.github/workflows/p048-completion.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  completion-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout completion candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Re-run P-048 product and completion tests
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input 'pytest>=8,<9'
+          python -m pytest -q tests/test_p048_broken_link_action.py tests/test_p048_completion_record.py
+
+      - name: Independently verify public v0.5.0 release and exact tag source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v0.5.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,name,publishedAt,url > p048-final-release.json
+          git fetch --force "https://github.com/${GITHUB_REPOSITORY}.git" refs/tags/v0.5.0:refs/tags/v0.5.0
+          resolved="$(git rev-list -n 1 v0.5.0)"
+          test "$resolved" = '1cc9cb51539e7e39e7141d994d9ad1709c71fece'
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('p048-final-release.json').read_text())
+          assert r['isDraft'] is False
+          assert r['isPrerelease'] is False
+          assert r['tagName']=='v0.5.0'
+          assert r['name']=='DAIS Broken Link Scanner Action v0.5.0'
+          assert r['publishedAt']
+          print('P048_FINAL_RELEASE_IDENTITY=PASS')
+          print('P048_EXACT_RELEASE_SOURCE=PASS')
+          PY
+
+      - name: Checkout real public positive consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/learning-git
+          ref: 01723a1825113de08810193f37e8047d978433c2
+          path: consumer-learning-git
+          persist-credentials: false
+
+      - name: Record positive consumer immutability baseline
+        run: |
+          set -euo pipefail
+          test "$(git -C consumer-learning-git rev-parse HEAD)" = '01723a1825113de08810193f37e8047d978433c2'
+          sha256sum consumer-learning-git/README.md > /tmp/p048-final-learning-before.sha256
+
+      - name: Freshly consume public released P-048 Action
+        id: learning
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/broken-link-scan@v0.5.0
+        with:
+          root: consumer-learning-git
+
+      - name: Require fresh positive consumer result
+        env:
+          STATUS: ${{ steps.learning.outputs.status }}
+          DOCUMENT_COUNT: ${{ steps.learning.outputs.document-count }}
+          URL_COUNT: ${{ steps.learning.outputs.absolute-url-count }}
+          RESULT_FILE: ${{ steps.learning.outputs.result-file }}
+          RESULT_SHA256: ${{ steps.learning.outputs.result-sha256 }}
+        run: |
+          set -euo pipefail
+          test "$STATUS" = PASS
+          test "$DOCUMENT_COUNT" -ge 1
+          test "$URL_COUNT" -ge 1
+          sha256sum --check /tmp/p048-final-learning-before.sha256
+          test "$(sha256sum "$RESULT_FILE" | awk '{print $1}')" = "$RESULT_SHA256"
+          cp "$RESULT_FILE" p048-final-positive-result.json
+          echo 'P048_FINAL_REAL_PUBLIC_POSITIVE=PASS'
+          echo 'P048_FINAL_INPUT_MUTATION=NO'
+
+      - name: Checkout real public safety-negative consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/Kimi-Haul
+          ref: 5905f5be3f812b801ab5f7ec5b33c65c166131fc
+          path: consumer-kimi-haul
+          persist-credentials: false
+
+      - name: Confirm exact negative-consumer source
+        run: |
+          set -euo pipefail
+          test "$(git -C consumer-kimi-haul rev-parse HEAD)" = '5905f5be3f812b801ab5f7ec5b33c65c166131fc'
+          grep -F 'http://localhost:3000' consumer-kimi-haul/README.md >/dev/null
+
+      - name: Require released Action to refuse real localhost target
+        id: kimi
+        continue-on-error: true
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/broken-link-scan@v0.5.0
+        with:
+          root: consumer-kimi-haul
+
+      - name: Require safety-negative failure and emit final attestation
+        env:
+          KIMI_OUTCOME: ${{ steps.kimi.outcome }}
+          POSITIVE_RESULT: ${{ steps.learning.outputs.result-file }}
+          POSITIVE_RESULT_SHA256: ${{ steps.learning.outputs.result-sha256 }}
+        run: |
+          set -euo pipefail
+          test "$KIMI_OUTCOME" = failure
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          record=json.loads(Path('examples/public-build-completion-p048-v0.5.0.json').read_text())
+          assert record['status']=='COMPLETE'
+          assert len(record['gates'])==19
+          assert all(v['state']=='PASS' for v in record['gates'].values())
+          out={
+            'schema_version':'1.0',
+            'evidence_type':'p048-final-completion-audit',
+            'roadmap_id':'P-048',
+            'release':'v0.5.0',
+            'released_source_commit':'1cc9cb51539e7e39e7141d994d9ad1709c71fece',
+            'positive_consumer':{
+              'repository':'AntonyMD7/learning-git',
+              'commit':'01723a1825113de08810193f37e8047d978433c2',
+              'result':'PASS',
+              'input_mutation_performed':False,
+              'sanitized_result_sha256':os.environ['POSITIVE_RESULT_SHA256'],
+            },
+            'safety_negative_consumer':{
+              'repository':'AntonyMD7/Kimi-Haul',
+              'commit':'5905f5be3f812b801ab5f7ec5b33c65c166131fc',
+              'fixture':'explicit localhost documentation target',
+              'action_outcome':os.environ['KIMI_OUTCOME'],
+              'private_network_request_permitted':False,
+            },
+            'canonical_gate_count':19,
+            'all_gates_pass':True,
+            'flagship_completion_claimed':False,
+            'adjacent_product_completion_claimed':False,
+          }
+          Path('p048-final-completion-attestation.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print('P048_FINAL_REAL_PUBLIC_SAFETY_NEGATIVE=PASS')
+          print('P048_19_GATE_COMPLETION_AUDIT=PASS')
+          print('FLAGSHIP_COMPLETION_CLAIMED=FALSE')
+          PY
+
+      - name: Retain sanitized final completion evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p048-final-completion-${{ github.run_id }}
+          path: |
+            p048-final-release.json
+            p048-final-positive-result.json
+            p048-final-completion-attestation.json
+          retention-days: 30
+          if-no-files-found: error
