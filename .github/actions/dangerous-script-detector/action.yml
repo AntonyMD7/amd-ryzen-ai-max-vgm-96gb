@@ -1,0 +1,109 @@
+name: DAIS Dangerous Script Detector
+description: Bounded non-executing risk detector for dangerous script/config constructs.
+author: AntonyMD7
+
+inputs:
+  root:
+    description: Relative directory inside GITHUB_WORKSPACE to scan.
+    required: false
+    default: '.'
+
+outputs:
+  status:
+    description: PASS, REVIEW_REQUIRED, or ERROR.
+    value: ${{ steps.result.outputs.status }}
+  highest-severity:
+    description: NONE, MEDIUM, HIGH, or CRITICAL.
+    value: ${{ steps.result.outputs.highest_severity }}
+  finding-count:
+    description: Total findings.
+    value: ${{ steps.result.outputs.finding_count }}
+  high-count:
+    description: HIGH findings.
+    value: ${{ steps.result.outputs.high_count }}
+  critical-count:
+    description: CRITICAL findings.
+    value: ${{ steps.result.outputs.critical_count }}
+  files-scanned:
+    description: Number of supported files scanned.
+    value: ${{ steps.result.outputs.files_scanned }}
+  result-file:
+    description: Absolute runner-temporary path to the sanitized JSON report.
+    value: ${{ steps.result.outputs.result_file }}
+  result-sha256:
+    description: SHA-256 of the sanitized JSON report bytes.
+    value: ${{ steps.result.outputs.result_sha256 }}
+
+runs:
+  using: composite
+  steps:
+    - name: Run bounded P-058 detector
+      id: scan
+      shell: bash
+      env:
+        P058_ROOT: ${{ inputs.root }}
+      run: |
+        set -euo pipefail
+        test "${RUNNER_OS:-}" = Linux
+        out="$(mktemp "${RUNNER_TEMP}/p058-dangerous-script.XXXXXX.json")"
+        set +e
+        python3 "$GITHUB_ACTION_PATH/detect.py" --workspace "$GITHUB_WORKSPACE" --root "$P058_ROOT" --output "$out"
+        detector_rc=$?
+        set -e
+        test -s "$out"
+        echo "result_file=$out" >> "$GITHUB_OUTPUT"
+        echo "detector_rc=$detector_rc" >> "$GITHUB_OUTPUT"
+
+    - name: Publish sanitized outputs
+      id: result
+      if: always() && steps.scan.outputs.result_file != ''
+      shell: bash
+      env:
+        RESULT_FILE: ${{ steps.scan.outputs.result_file }}
+      run: |
+        set -euo pipefail
+        python3 - "$RESULT_FILE" "$GITHUB_OUTPUT" <<'PY'
+        import hashlib, json, sys
+        from pathlib import Path
+        path=Path(sys.argv[1])
+        out=Path(sys.argv[2])
+        data=json.loads(path.read_text(encoding='utf-8'))
+        digest=hashlib.sha256(path.read_bytes()).hexdigest()
+        counts=data.get('severity_counts',{})
+        with out.open('a',encoding='utf-8') as fh:
+            fh.write(f"status={data.get('status','ERROR')}\n")
+            fh.write(f"highest_severity={data.get('highest_severity','NONE')}\n")
+            fh.write(f"finding_count={int(data.get('finding_count',0))}\n")
+            fh.write(f"high_count={int(counts.get('HIGH',0))}\n")
+            fh.write(f"critical_count={int(counts.get('CRITICAL',0))}\n")
+            fh.write(f"files_scanned={int(data.get('files_scanned',0))}\n")
+            fh.write(f"result_file={path}\n")
+            fh.write(f"result_sha256={digest}\n")
+        print(f"P058_RESULT_SHA256={digest}")
+        PY
+
+    - name: Fail closed on detector error or high/critical findings
+      if: always() && steps.scan.outputs.result_file != ''
+      shell: bash
+      env:
+        RESULT_FILE: ${{ steps.scan.outputs.result_file }}
+        DETECTOR_RC: ${{ steps.scan.outputs.detector_rc }}
+      run: |
+        set -euo pipefail
+        python3 - "$RESULT_FILE" "$DETECTOR_RC" <<'PY'
+        import json, sys
+        from pathlib import Path
+        data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+        rc=int(sys.argv[2])
+        if data.get('status') == 'ERROR':
+            if rc == 0:
+                raise SystemExit('P-058 inconsistent detector state: ERROR with zero detector rc')
+            raise SystemExit('P-058 detector failed closed: input could not be safely scanned')
+        if rc != 0:
+            raise SystemExit('P-058 inconsistent detector state: nonzero detector rc without ERROR')
+        counts=data.get('severity_counts',{})
+        blocking=int(counts.get('HIGH',0))+int(counts.get('CRITICAL',0))
+        if blocking:
+            raise SystemExit(f'P-058 review required: {blocking} HIGH/CRITICAL finding(s)')
+        print(f"P058_ACTION_STATUS={data.get('status')}")
+        PY
