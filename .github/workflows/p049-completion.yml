@@ -1,0 +1,152 @@
+name: P-049 Secret Exposure Detection completion audit
+
+on:
+  pull_request:
+    paths:
+      - 'examples/public-build-completion-p049-v0.6.0.json'
+      - 'docs/P049-COMPLETION-RECORD-v0.6.0.md'
+      - '.github/workflows/p049-completion.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/public-build-completion-p049-v0.6.0.json'
+      - 'docs/P049-COMPLETION-RECORD-v0.6.0.md'
+      - '.github/workflows/p049-completion.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  completion-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout completion candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Re-run P-049 product contract and 19-gate completion audit
+        run: |
+          set -euo pipefail
+          python tests/test_p049_secret_exposure_action.py
+          python - <<'PY'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          from public_build_completion_contract import audit_record
+          p=Path('examples/public-build-completion-p049-v0.6.0.json')
+          record=json.loads(p.read_text())
+          report=audit_record(record)
+          assert report['errors']==[]
+          assert report['declared_status']=='COMPLETE'
+          assert report['readiness']=='COMPLETE_CONTRACT_SATISFIED'
+          assert report['completion_contract_satisfied'] is True
+          assert report['blocking_gates']==[]
+          assert report['gate_counts']['PASS']==19
+          assert report['project_completion_record_populated'] is True
+          assert report['safe_public_evidence_prefilter'] is True
+          assert len(record['gates'])==19
+          assert all(v['state']=='PASS' and v.get('applicability_reviewed') is True for v in record['gates'].values())
+          Path('p049-final-contract-audit.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
+          print('P049_19_GATE_COMPLETION_CONTRACT=PASS')
+          PY
+
+      - name: Independently verify public v0.6.0 release and exact tag source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v0.6.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,name,publishedAt,url > p049-final-release.json
+          git fetch --force "https://github.com/${GITHUB_REPOSITORY}.git" refs/tags/v0.6.0:refs/tags/v0.6.0
+          resolved="$(git rev-list -n 1 v0.6.0)"
+          test "$resolved" = 'f90538531fdeafd05d1f1d22c96d6db70c3d2d96'
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('p049-final-release.json').read_text())
+          assert r['isDraft'] is False and r['isPrerelease'] is False
+          assert r['tagName']=='v0.6.0'
+          assert r['name']=='DAIS Secret Exposure Detection Action v0.6.0'
+          assert r['publishedAt']
+          print('P049_FINAL_RELEASE_IDENTITY=PASS')
+          print('P049_EXACT_RELEASE_SOURCE=PASS')
+          PY
+
+      - name: Checkout pinned real public consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/learning-git
+          ref: 01723a1825113de08810193f37e8047d978433c2
+          path: consumer-learning-git
+          persist-credentials: false
+
+      - name: Record consumer immutability baseline
+        run: |
+          set -euo pipefail
+          test "$(git -C consumer-learning-git rev-parse HEAD)" = '01723a1825113de08810193f37e8047d978433c2'
+          sha256sum consumer-learning-git/README.md > /tmp/p049-final-learning-before.sha256
+
+      - name: Freshly consume released P-049 Action
+        id: scan
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/secret-exposure-scan@v0.6.0
+        with:
+          root: consumer-learning-git
+
+      - name: Require fresh released-ref acceptance and emit final attestation
+        env:
+          STATUS: ${{ steps.scan.outputs.status }}
+          FINDING_COUNT: ${{ steps.scan.outputs.finding-count }}
+          FILE_COUNT: ${{ steps.scan.outputs.file-count }}
+          RESULT_FILE: ${{ steps.scan.outputs.result-file }}
+          RESULT_SHA256: ${{ steps.scan.outputs.result-sha256 }}
+          GITLEAKS_VERSION: ${{ steps.scan.outputs.gitleaks-version }}
+        run: |
+          set -euo pipefail
+          test "$STATUS" = PASS
+          test "$FINDING_COUNT" = 0
+          test "$FILE_COUNT" -ge 1
+          test "$GITLEAKS_VERSION" = 8.30.0
+          sha256sum --check /tmp/p049-final-learning-before.sha256
+          test "$(sha256sum "$RESULT_FILE" | awk '{print $1}')" = "$RESULT_SHA256"
+          cp "$RESULT_FILE" p049-final-consumer-result.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          result=json.loads(Path('p049-final-consumer-result.json').read_text())
+          assert result['status']=='PASS' and result['finding_count']==0
+          assert result['privacy']['secret_values_retained'] is False
+          record=json.loads(Path('examples/public-build-completion-p049-v0.6.0.json').read_text())
+          assert record['status']=='COMPLETE'
+          out={
+            'schema_version':'1.0','evidence_type':'p049-final-completion-audit','roadmap_id':'P-049',
+            'release':'v0.6.0','released_source_commit':'f90538531fdeafd05d1f1d22c96d6db70c3d2d96',
+            'consumer_repository':'AntonyMD7/learning-git','consumer_commit':'01723a1825113de08810193f37e8047d978433c2',
+            'consumer_result':'PASS','input_mutation_performed':False,'finding_count':0,
+            'runtime_canaries_required_by_released_action':True,'secret_values_retained':False,
+            'canonical_gate_count':19,'all_gates_pass':True,'flagship_completion_claimed':False,
+            'adjacent_product_completion_claimed':False
+          }
+          Path('p049-final-completion-attestation.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print('P049_FINAL_REAL_PUBLIC_CONSUMER=PASS')
+          print('P049_FINAL_INPUT_MUTATION=NO')
+          print('P049_FINAL_PRIVACY_BOUNDARY=PASS')
+          PY
+
+      - name: Retain sanitized final completion evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p049-final-completion-${{ github.run_id }}
+          path: |
+            p049-final-contract-audit.json
+            p049-final-release.json
+            p049-final-consumer-result.json
+            p049-final-completion-attestation.json
+          retention-days: 30
+          if-no-files-found: error
