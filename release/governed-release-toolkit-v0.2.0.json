@@ -4,7 +4,7 @@
   "roadmap_ids": ["P-051", "P-057"],
   "tag": "v0.2.0",
   "title": "DAIS Governed Release Toolkit v0.2.0",
-  "source_commit": "c119631d29e68412aa15097d364fb50eb27d19e8",
+  "source_commit": "8c5e5959d3f56d166aa9d23ff56d9f31b4d9963d",
   "notes_file": "RELEASE-NOTES-v0.2.0.md",
   "required_files": [
     "README.md",
