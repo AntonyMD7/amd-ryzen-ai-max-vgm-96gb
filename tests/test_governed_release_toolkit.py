@@ -50,7 +50,7 @@ def test_manifest_refuses_path_traversal(tmp_path: Path):
     data = _manifest(tmp_path)
     data["notes_file"] = "../secret.md"
     data["required_files"] = ["README.md", "../secret.md"]
-    with pytest.raises(ManifestError, match="safe repository-relative path"):
+    with pytest.raises(ManifestError, match="forbidden traversal"):
         validate_manifest(data, tmp_path)
 
 
