@@ -4,7 +4,7 @@
   "roadmap_ids": ["P-054"],
   "tag": "v0.9.0",
   "title": "DAIS Contributor Onboarding Assistant v0.9.0",
-  "source_commit": "a4ff77c6fb07f9284a451110f7acd1520aaddacc",
+  "source_commit": "290c358fb1569c85c6c9082efea2baefb30c5c75",
   "notes_file": "docs/P054-RELEASE-NOTES-v0.9.0.md",
   "required_files": [
     "README.md",
