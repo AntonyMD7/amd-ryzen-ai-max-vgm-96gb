@@ -12,7 +12,9 @@ This release publishes the reusable public-good implementation for roadmap proje
 - fail-closed fork/PR, path-traversal, duplicate-ID, source-drift and completion-overclaim handling;
 - sanitized release evidence that never retains the GitHub token;
 - recovery guidance for partial draft/publication states;
-- adversarial automated tests and public beginner/operator/engineer documentation.
+- adversarial automated tests and public beginner/operator/engineer documentation;
+- dedicated beginner entry point at `docs/GOVERNED-RELEASE-START-HERE.md`;
+- dedicated privacy-safe public issue path at `.github/ISSUE_TEMPLATE/governed-release-toolkit.yml`.
 
 ## Search-before-build position
 
