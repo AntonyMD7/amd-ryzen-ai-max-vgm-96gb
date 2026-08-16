@@ -1,0 +1,57 @@
+name: DAIS CODEOWNERS Assistant
+description: Read-only CODEOWNERS precedence, structure, risk and guidance audit without GitHub API or repository mutation.
+inputs:
+  root:
+    description: Repository checkout root to audit.
+    required: false
+    default: .
+  language:
+    description: Guide language (en or es).
+    required: false
+    default: en
+outputs:
+  status:
+    description: Local CODEOWNERS audit state.
+    value: ${{ steps.audit.outputs.status }}
+  finding-count:
+    description: Number of privacy-minimized findings.
+    value: ${{ steps.audit.outputs.finding-count }}
+  report-sha256:
+    description: SHA-256 of deterministic sanitized JSON report.
+    value: ${{ steps.audit.outputs.report-sha256 }}
+  report-path:
+    description: Runner-temporary report path.
+    value: ${{ steps.audit.outputs.report-path }}
+  guide-path:
+    description: Runner-temporary guide path.
+    value: ${{ steps.audit.outputs.guide-path }}
+runs:
+  using: composite
+  steps:
+    - id: audit
+      shell: bash
+      env:
+        P055_ROOT: ${{ inputs.root }}
+        P055_LANGUAGE: ${{ inputs.language }}
+      run: |
+        set -euo pipefail
+        case "$P055_LANGUAGE" in
+          en|es) ;;
+          *) echo "Unsupported P-055 language" >&2; exit 2 ;;
+        esac
+        out="${RUNNER_TEMP}/p055-codeowners-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}-${P055_LANGUAGE}"
+        rm -rf "$out"
+        mkdir -p "$out"
+        result="$(python "${GITHUB_ACTION_PATH}/../../../scripts/p055_codeowners_assistant.py" --root "$P055_ROOT" --language "$P055_LANGUAGE" --out-dir "$out")"
+        RESULT="$result" python - <<'PY' >> "$GITHUB_OUTPUT"
+        import json, os
+        d=json.loads(os.environ['RESULT'])
+        print(f"status={d['status']}")
+        print(f"finding-count={d['finding_count']}")
+        print(f"report-sha256={d['report_sha256']}")
+        print(f"report-path={d['report_path']}")
+        print(f"guide-path={d['guide_path']}")
+        PY
+        if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+          cat "$out/p055-codeowners-guide.md" >> "$GITHUB_STEP_SUMMARY"
+        fi

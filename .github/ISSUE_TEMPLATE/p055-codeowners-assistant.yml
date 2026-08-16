@@ -1,0 +1,52 @@
+name: P-055 CODEOWNERS Assistant support
+description: Report a reproducible P-055 local-audit problem without publishing private ownership data.
+title: "[P-055] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        P-055 is a read-only local preflight, not GitHub's authoritative CODEOWNERS parser or access-control verifier. Do not paste credentials, private repository content, owner email addresses, private team names, tokens, or sensitive paths.
+  - type: dropdown
+    id: category
+    attributes:
+      label: Problem category
+      options:
+        - Unexpected local status
+        - False-positive local finding
+        - Missing local finding
+        - GitHub Action integration
+        - English/Spanish guide
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: P-055 version or commit
+      placeholder: v0.10.0 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: status
+    attributes:
+      label: Sanitized status
+      placeholder: CODEOWNERS_MISSING / CODEOWNERS_LOCAL_ERRORS / CODEOWNERS_NEEDS_REVIEW / CODEOWNERS_LOCAL_BASELINE_READY
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal sanitized reproduction
+      description: Use synthetic owner names and synthetic paths only. Include finding codes/line numbers rather than real owner identities where possible.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I removed credentials, tokens, private repository content, private team/user identities, personal email addresses, and sensitive path names.
+          required: true
+        - label: I understand P-055 local PASS does not verify GitHub owner access, branch protection, server-side syntax, or repository security.
+          required: true
