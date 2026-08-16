@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "release_id": "DAIS-P047-README-LINT-V0.4.0",
+  "roadmap_ids": ["P-047"],
+  "tag": "v0.4.0",
+  "title": "DAIS README Lint Action v0.4.0",
+  "source_commit": "e8ec4a6f5dfbaadfaca46c98ad3679dce8e1ddd7",
+  "notes_file": "RELEASE-NOTES-v0.4.0.md",
+  "required_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    ".github/actions/readme-lint/action.yml",
+    ".github/actions/readme-lint/.markdownlint-cli2.yaml",
+    ".github/actions/readme-lint/preflight.py",
+    ".github/workflows/p047-readme-lint-action.yml",
+    ".github/ISSUE_TEMPLATE/p047-readme-lint.yml",
+    "docs/P047-README-LINT-START-HERE.md",
+    "docs/P047-README-LINT-ACTION.md",
+    "tests/test_p047_readme_lint_contract.py",
+    "RELEASE-NOTES-v0.4.0.md"
+  ],
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "post_publish_exact_tag_verification_required": true,
+  "roadmap_completion_on_publish": false,
+  "make_latest": true
+}
