@@ -50,6 +50,7 @@ def test_remote_pipe_is_critical_and_sanitized() -> None:
         assert "scripts/bootstrap.sh" not in serialized
         assert "path_sha256" in finding and len(finding["path_sha256"]) == 64
         assert "line_sha256" in finding and len(finding["line_sha256"]) == 64
+        assert report["privacy"]["matched_text_retained"] is False
         assert report["claims"]["script_safe_to_execute"] is False
     finally:
         tmp.cleanup()
