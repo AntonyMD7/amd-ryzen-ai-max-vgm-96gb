@@ -91,23 +91,34 @@ def contained_root(workspace: Path, requested: str) -> Path:
         raise UnsafeInput("root must be a directory")
     return resolved
 
-def language_for(path: Path, root: Path) -> str | None:
+def language_for(path: Path, scan_root: Path, workspace_root: Path) -> str | None:
     language = SUFFIX_LANGUAGE.get(path.suffix.lower())
     if language != "yaml":
         return language
-    rel = path.relative_to(root).as_posix().lower()
-    if rel.startswith(".github/workflows/") or rel.endswith("/action.yml") or rel.endswith("/action.yaml") or rel in {"action.yml", "action.yaml"}:
+
+    # GitHub workflow identity is repository/workspace-relative. Using only the
+    # caller-selected scan root would silently stop recognizing workflow YAML
+    # when root is `.github/workflows` (or another contained subdirectory).
+    workspace_rel = path.relative_to(workspace_root).as_posix().lower()
+    scan_rel = path.relative_to(scan_root).as_posix().lower()
+    if (
+        workspace_rel.startswith(".github/workflows/")
+        or workspace_rel.endswith("/action.yml")
+        or workspace_rel.endswith("/action.yaml")
+        or workspace_rel in {"action.yml", "action.yaml"}
+        or scan_rel in {"action.yml", "action.yaml"}
+    ):
         return "yaml"
     return None
 
-def candidates(root: Path) -> list[tuple[Path, str]]:
+def candidates(root: Path, workspace_root: Path) -> list[tuple[Path, str]]:
     found: list[tuple[Path, str]] = []
     for directory, dirs, files in __import__("os").walk(root, followlinks=False):
         base = Path(directory)
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not (base / d).is_symlink())
         for name in sorted(files):
             path = base / name
-            language = language_for(path, root)
+            language = language_for(path, root, workspace_root)
             if language is None:
                 continue
             if path.is_symlink():
@@ -120,12 +131,13 @@ def candidates(root: Path) -> list[tuple[Path, str]]:
     return found
 
 def scan(workspace: Path, requested_root: str = ".") -> dict:
-    root = contained_root(workspace, requested_root)
+    workspace_root = workspace.resolve(strict=True)
+    root = contained_root(workspace_root, requested_root)
     findings: list[dict] = []
     files_scanned = total_bytes = 0
     language_counts: dict[str, int] = {}
     severity_counts = {"MEDIUM": 0, "HIGH": 0, "CRITICAL": 0}
-    for path, language in candidates(root):
+    for path, language in candidates(root, workspace_root):
         size = path.stat().st_size
         if size > MAX_FILE_BYTES:
             raise UnsafeInput("candidate exceeds per-file size limit")
