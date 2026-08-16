@@ -1,0 +1,171 @@
+name: DAIS governed release toolkit v0.2.0
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/governed-release-toolkit-v0.2.0.yml'
+      - '.github/actions/governed-release/action.yml'
+      - 'release/governed-release-toolkit-v0.2.0.json'
+      - 'RELEASE-NOTES-v0.2.0.md'
+      - 'scripts/governed_release_manifest.py'
+      - 'scripts/governed_release_publish.py'
+      - 'tests/test_governed_release_toolkit.py'
+      - 'docs/GOVERNED-RELEASE-TOOLKIT.md'
+      - 'docs/RELEASE-GOVERNANCE.md'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/governed-release-toolkit-v0.2.0.yml'
+      - 'release/governed-release-toolkit-v0.2.0.json'
+      - 'RELEASE-NOTES-v0.2.0.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: governed-release-toolkit-v0.2.0
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate generic governed release path
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed release-control source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Run adversarial toolkit tests
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'pytest>=8,<9'
+          python -m pytest -q tests/test_governed_release_toolkit.py
+
+      - name: Require exact source to be retained and ancestral
+        run: |
+          set -euo pipefail
+          source_commit="$(python -c "import json;print(json.load(open('release/governed-release-toolkit-v0.2.0.json'))['source_commit'])")"
+          git cat-file -e "${source_commit}^{commit}"
+          git merge-base --is-ancestor "$source_commit" "$GITHUB_SHA"
+          echo "EXACT_SOURCE_RETAINED=PASS"
+
+      - name: Exercise reusable action in plan-only mode
+        id: plan
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/governed-release-toolkit-v0.2.0.json
+          publish: 'false'
+          evidence-file: governed-release-toolkit-plan-evidence.json
+
+      - name: Assert plan did not mutate release state
+        env:
+          ACTION_STATUS: ${{ steps.plan.outputs.status }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d = json.loads(Path('governed-release-toolkit-plan-evidence.json').read_text(encoding='utf-8'))
+          assert d.get('release_created') is False
+          assert d.get('tag_created') is False
+          assert d.get('roadmap_completion_promoted') is False
+          print('GENERIC_PLAN_ONLY_ACCEPTANCE=PASS')
+          print('RELEASE_CREATED=FALSE')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+
+      - name: Retain sanitized plan evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: governed-release-toolkit-plan-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            governed-release-toolkit-plan-evidence.json
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    name: Publish exact-source toolkit release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Publish through the reusable generic action
+        id: publish
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/governed-release-toolkit-v0.2.0.json
+          publish: 'true'
+          allowed-ref: refs/heads/main
+          evidence-file: governed-release-toolkit-publication-evidence.json
+
+      - name: Independently verify public release identity and exact tag target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(python -c "import json;print(json.load(open('release/governed-release-toolkit-v0.2.0.json'))['tag'])")"
+          source_commit="$(python -c "import json;print(json.load(open('release/governed-release-toolkit-v0.2.0.json'))['source_commit'])")"
+          title="$(python -c "import json;print(json.load(open('release/governed-release-toolkit-v0.2.0.json'))['title'])")"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName,name,targetCommitish,url,publishedAt > governed-release-toolkit-public-release.json
+          python - "$tag" "$source_commit" "$title" <<'PY'
+          import json, subprocess, sys
+          from pathlib import Path
+          tag, source, title = sys.argv[1:]
+          release = json.loads(Path('governed-release-toolkit-public-release.json').read_text(encoding='utf-8'))
+          assert release['isDraft'] is False
+          assert release['tagName'] == tag
+          assert release['name'] == title
+          assert release['publishedAt']
+          subprocess.run(['git','fetch','--force',f'https://github.com/{__import__("os").environ["GITHUB_REPOSITORY"]}.git',f'refs/tags/{tag}:refs/tags/{tag}'], check=True)
+          resolved = subprocess.check_output(['git','rev-list','-n','1',tag], text=True).strip()
+          assert resolved == source, (resolved, source)
+          out = {
+              'schema_version': '1.0',
+              'evidence_type': 'generic-governed-release-toolkit-publication',
+              'roadmap_ids': ['P-051','P-057'],
+              'tag': tag,
+              'intended_source_commit': source,
+              'resolved_tag_commit': resolved,
+              'release_url': release['url'],
+              'published_at': release['publishedAt'],
+              'exact_tag_target_verified': True,
+              'generic_action_execution_verified': True,
+              'roadmap_completion_promoted': False,
+              'final_completion_audit_required': True
+          }
+          Path('governed-release-toolkit-independent-verification.json').write_text(json.dumps(out, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          print('GENERIC_GOVERNED_RELEASE_PUBLISHED=PASS')
+          print('EXACT_PUBLIC_TAG_VERIFIED=PASS')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+
+      - name: Retain publication and independent verification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: governed-release-toolkit-publication-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            governed-release-toolkit-publication-evidence.json
+            governed-release-toolkit-public-release.json
+            governed-release-toolkit-independent-verification.json
+          retention-days: 30
+          if-no-files-found: error
