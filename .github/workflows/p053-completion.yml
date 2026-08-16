@@ -1,0 +1,179 @@
+name: P-053 Issue Template Generator completion audit
+
+on:
+  pull_request:
+    paths:
+      - 'examples/public-build-completion-p053-v0.8.0.json'
+      - 'docs/P053-COMPLETION-RECORD-v0.8.0.md'
+      - '.github/workflows/p053-completion.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/public-build-completion-p053-v0.8.0.json'
+      - 'docs/P053-COMPLETION-RECORD-v0.8.0.md'
+      - '.github/workflows/p053-completion.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  completion-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout completion candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Re-run P-053 product tests and 19-gate completion audit
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input 'pytest>=8,<9' 'PyYAML>=6,<7'
+          python -m pytest -q tests/test_p053_issue_template_generator.py
+          python - <<'PY'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          from public_build_completion_contract import audit_record
+          p=Path('examples/public-build-completion-p053-v0.8.0.json')
+          record=json.loads(p.read_text())
+          report=audit_record(record)
+          assert report['errors']==[]
+          assert report['declared_status']=='COMPLETE'
+          assert report['readiness']=='COMPLETE_CONTRACT_SATISFIED'
+          assert report['completion_contract_satisfied'] is True
+          assert report['blocking_gates']==[]
+          assert report['gate_counts']['PASS']==19
+          assert report['project_completion_record_populated'] is True
+          assert report['safe_public_evidence_prefilter'] is True
+          assert len(record['gates'])==19
+          assert all(v['state']=='PASS' and v.get('applicability_reviewed') is True for v in record['gates'].values())
+          Path('p053-final-contract-audit.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
+          print('P053_19_GATE_COMPLETION_CONTRACT=PASS')
+          PY
+
+      - name: Independently verify public v0.8.0 release, exact tag source and release evidence run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v0.8.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,name,publishedAt,url > p053-final-release.json
+          git fetch --force "https://github.com/${GITHUB_REPOSITORY}.git" refs/tags/v0.8.0:refs/tags/v0.8.0
+          resolved="$(git rev-list -n 1 v0.8.0)"
+          test "$resolved" = '2cbe70ae48d2813364f59aae180b3dcf92f7c9c3'
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31939720889" > p053-release-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31939720889/artifacts" > p053-release-artifacts.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          release=json.loads(Path('p053-final-release.json').read_text())
+          assert release['isDraft'] is False and release['isPrerelease'] is False
+          assert release['tagName']=='v0.8.0'
+          assert release['name']=='DAIS Issue Template Generator v0.8.0'
+          assert release['publishedAt']
+          run=json.loads(Path('p053-release-run.json').read_text())
+          assert run['id']==31939720889 and run['conclusion']=='success'
+          assert run['head_sha']=='1413b660b08f3ae88a080a64080528c2be46840c'
+          artifacts=json.loads(Path('p053-release-artifacts.json').read_text())['artifacts']
+          expected={
+            'p053-release-plan-31939720889':('9261674582','sha256:1b5964a3dc03ab9184946a1d51626f1308680933934d83ca3042724734e17bfb'),
+            'p053-publication-31939720889':('9261676722','sha256:24bb0e7f18b814fb20ebb14109f2ca32b4ec8f4695c6034bd39e1ab282069bf3'),
+            'p053-released-ref-consumer-31939720889':('9261678620','sha256:b3bbdbe64e01983fe13477d93fa302a17873a14067583c63c199a56e0972afe3')
+          }
+          found={a['name']:(str(a['id']),a.get('digest')) for a in artifacts}
+          for name,want in expected.items(): assert found.get(name)==want,(name,found.get(name),want)
+          print('P053_FINAL_RELEASE_IDENTITY=PASS')
+          print('P053_EXACT_RELEASE_SOURCE=PASS')
+          print('P053_RELEASE_EVIDENCE_IDENTITY=PASS')
+          PY
+
+      - name: Checkout pinned real public consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/learning-git
+          ref: 01723a1825113de08810193f37e8047d978433c2
+          path: consumer-learning-git
+          persist-credentials: false
+
+      - name: Record consumer immutability baseline
+        run: |
+          set -euo pipefail
+          test "$(git -C consumer-learning-git rev-parse HEAD)" = '01723a1825113de08810193f37e8047d978433c2'
+          sha256sum consumer-learning-git/README.md > /tmp/p053-final-learning-before.sha256
+
+      - name: Freshly consume released P-053 Action
+        id: generate
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/issue-template-generator@v0.8.0
+        with:
+          spec-json: >-
+            {"name":"Learning repository support","description":"Request help with a public learning-git workflow","kind":"support","title_prefix":"[SUPPORT]","project_context":"the public learning-git repository","include_environment":true}
+
+      - name: Repeat released P-053 Action for determinism
+        id: generate-again
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/issue-template-generator@v0.8.0
+        with:
+          spec-json: >-
+            {"name":"Learning repository support","description":"Request help with a public learning-git workflow","kind":"support","title_prefix":"[SUPPORT]","project_context":"the public learning-git repository","include_environment":true}
+
+      - name: Require fresh released-ref acceptance and emit final attestation
+        env:
+          OUT: ${{ steps.generate.outputs.output-directory }}
+          DIGEST: ${{ steps.generate.outputs.bundle-sha256 }}
+          SECOND_DIGEST: ${{ steps.generate-again.outputs.bundle-sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          test "$DIGEST" = "$SECOND_DIGEST"
+          sha256sum --check /tmp/p053-final-learning-before.sha256
+          test "$(find "$OUT" -maxdepth 1 -type f | wc -l)" = 2
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          import yaml
+          out=Path(os.environ['OUT'])
+          form=yaml.safe_load((out/'dais-support.yml').read_text(encoding='utf-8'))
+          cfg=yaml.safe_load((out/'config.yml').read_text(encoding='utf-8'))
+          assert set(form)=={'name','description','title','body'}
+          assert cfg=={'blank_issues_enabled':False,'contact_links':[]}
+          privacy=[x for x in form['body'] if x.get('id')=='privacy']
+          assert len(privacy)==1 and privacy[0]['type']=='checkboxes'
+          assert all(o.get('required') is True for o in privacy[0]['attributes']['options'])
+          record=json.loads(Path('examples/public-build-completion-p053-v0.8.0.json').read_text())
+          assert record['status']=='COMPLETE'
+          attestation={
+            'schema_version':'1.0','evidence_type':'p053-final-completion-audit','roadmap_id':'P-053',
+            'release':'v0.8.0','released_source_commit':'2cbe70ae48d2813364f59aae180b3dcf92f7c9c3',
+            'release_control_commit':'1413b660b08f3ae88a080a64080528c2be46840c',
+            'consumer_repository':'AntonyMD7/learning-git','consumer_commit':'01723a1825113de08810193f37e8047d978433c2',
+            'bundle_sha256':os.environ['DIGEST'],'repeat_bundle_sha256':os.environ['SECOND_DIGEST'],
+            'consumer_result':'PASS','determinism':'PASS','privacy_controls':'PASS',
+            'input_mutation_performed':False,'repository_mutation_performed':False,
+            'github_schema_officially_validated':False,'canonical_gate_count':19,'all_gates_pass':True,
+            'flagship_completion_claimed':False,'adjacent_product_completion_claimed':False
+          }
+          Path('p053-final-completion-attestation.json').write_text(json.dumps(attestation,indent=2,sort_keys=True)+'\n')
+          print('P053_FINAL_REAL_PUBLIC_CONSUMER=PASS')
+          print('P053_FINAL_DETERMINISM=PASS')
+          print('P053_FINAL_INPUT_MUTATION=NO')
+          print('P053_FINAL_PRIVACY_BOUNDARY=PASS')
+          PY
+
+      - name: Retain sanitized final completion evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p053-final-completion-${{ github.run_id }}
+          path: |
+            p053-final-contract-audit.json
+            p053-final-release.json
+            p053-release-run.json
+            p053-release-artifacts.json
+            p053-final-completion-attestation.json
+          retention-days: 30
+          if-no-files-found: error
