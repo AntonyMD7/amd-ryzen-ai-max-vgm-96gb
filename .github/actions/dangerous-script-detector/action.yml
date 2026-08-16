@@ -47,7 +47,7 @@ runs:
         test "${RUNNER_OS:-}" = Linux
         out="$(mktemp "${RUNNER_TEMP}/p058-dangerous-script.XXXXXX.json")"
         set +e
-        python3 "$GITHUB_ACTION_PAQH/detect.py"          --workspace "$GITHUB_WORKSPACE"          --root "$P058_ROOT"          --output "$out"
+        python3 "$GITHUB_ACTION_PATH/detect.py" --workspace "$GITHUB_WORKSPACE" --root "$P058_ROOT" --output "$out"
         detector_rc=$?
         set -e
         test -s "$out"
