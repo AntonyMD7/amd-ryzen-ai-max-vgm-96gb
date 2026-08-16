@@ -1,0 +1,156 @@
+name: DAIS Broken Link Scanner Action
+description: Public-network-only, checksum-pinned documentation link checking built on Lychee
+inputs:
+  root:
+    description: Relative documentation root; no parent traversal, symlink root, or glob syntax
+    required: false
+    default: '.'
+outputs:
+  status:
+    description: PASS when Lychee reports no broken links in the bounded scope
+    value: ${{ steps.result.outputs.status }}
+  document-count:
+    description: Number of bounded documentation files scanned
+    value: ${{ steps.preflight.outputs.document_count }}
+  absolute-url-count:
+    description: Number of explicit HTTP(S) URLs observed by the network-free preflight
+    value: ${{ steps.preflight.outputs.absolute_url_count }}
+  result-file:
+    description: Privacy-minimized JSON result path
+    value: ${{ steps.result.outputs.result_file }}
+  result-sha256:
+    description: SHA-256 of the privacy-minimized JSON result
+    value: ${{ steps.result.outputs.result_sha256 }}
+  lychee-version:
+    description: Exact Lychee version used by this Action
+    value: '0.24.2'
+runs:
+  using: composite
+  steps:
+    - name: Enforce hosted-runner and bounded input policy
+      id: preflight
+      shell: bash
+      env:
+        P048_ROOT: ${{ inputs.root }}
+        P048_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+      run: |
+        set -euo pipefail
+        if [[ "$P048_RUNNER_ENVIRONMENT" != "github-hosted" ]]; then
+          echo 'P-048 v0.5.0 refuses self-hosted runners because repository-controlled links could probe private networks.' >&2
+          exit 2
+        fi
+        python "$GITHUB_ACTION_PATH/preflight.py" "$P048_ROOT"
+
+    - name: Install exact Lychee 0.24.2 artifact
+      id: install
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
+          echo 'P-048 v0.5.0 supports GitHub-hosted Linux x64 only.' >&2
+          exit 2
+        fi
+        version='0.24.2'
+        expected='1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a'
+        url="https://github.com/lycheeverse/lychee/releases/download/lychee-v${version}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+        archive="$RUNNER_TEMP/p048-lychee.tar.gz"
+        extract="$RUNNER_TEMP/p048-lychee"
+        rm -rf "$extract" "$archive"
+        mkdir -p "$extract"
+        curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 "$url" -o "$archive"
+        printf '%s  %s\n' "$expected" "$archive" | sha256sum --check --strict
+        while IFS= read -r entry; do
+          case "$entry" in
+            /*|*'../'*|'..'|../*) echo "Unsafe archive path refused: $entry" >&2; exit 2 ;;
+          esac
+        done < <(tar -tzf "$archive")
+        tar -xzf "$archive" -C "$extract"
+        mapfile -t bins < <(find "$extract" -maxdepth 3 -type f -name lychee -print)
+        if [[ "${#bins[@]}" -ne 1 ]]; then
+          echo 'Expected exactly one Lychee executable in pinned archive.' >&2
+          exit 2
+        fi
+        chmod 0555 "${bins[0]}"
+        "${bins[0]}" --version
+        echo "binary=${bins[0]}" >> "$GITHUB_OUTPUT"
+        echo "archive_sha256=$expected" >> "$GITHUB_OUTPUT"
+
+    - name: Scan fixed bounded scope with private-network exclusion
+      id: scan
+      continue-on-error: true
+      shell: bash
+      env:
+        LYCHEE: ${{ steps.install.outputs.binary }}
+        MANIFEST: ${{ steps.preflight.outputs.manifest }}
+        ROOT_ABS: ${{ steps.preflight.outputs.root_abs }}
+      run: |
+        set -uo pipefail
+        raw="$RUNNER_TEMP/p048-lychee-raw.json"
+        err="$RUNNER_TEMP/p048-lychee-stderr.txt"
+        set +e
+        "$LYCHEE" \
+          --no-progress \
+          --format json \
+          --exclude-all-private \
+          --max-retries 2 \
+          --timeout 20 \
+          --host-concurrency 4 \
+          --host-request-interval 200ms \
+          --root-dir "$ROOT_ABS" \
+          --files-from "$MANIFEST" \
+          >"$raw" 2>"$err"
+        rc=$?
+        set -e
+        echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
+        echo "raw=$raw" >> "$GITHUB_OUTPUT"
+        echo "stderr=$err" >> "$GITHUB_OUTPUT"
+        exit "$rc"
+
+    - name: Emit privacy-minimized result
+      id: result
+      if: always() && steps.preflight.outcome == 'success' && steps.install.outcome == 'success'
+      shell: bash
+      env:
+        RAW: ${{ steps.scan.outputs.raw }}
+        STDERR_FILE: ${{ steps.scan.outputs.stderr }}
+        EXIT_CODE: ${{ steps.scan.outputs.exit_code }}
+        DOCS: ${{ steps.preflight.outputs.document_count }}
+        BYTES: ${{ steps.preflight.outputs.document_bytes }}
+        URLS: ${{ steps.preflight.outputs.absolute_url_count }}
+      run: |
+        set -euo pipefail
+        : "${EXIT_CODE:=1}"
+        result="$RUNNER_TEMP/p048-result.json"
+        python "$GITHUB_ACTION_PATH/sanitize_report.py" "$RAW" "$STDERR_FILE" "$EXIT_CODE" "$DOCS" "$BYTES" "$URLS" "$result"
+        digest="$(sha256sum "$result" | awk '{print $1}')"
+        case "$EXIT_CODE" in
+          0) status=PASS ;;
+          2) status=FAIL ;;
+          *) status=ERROR ;;
+        esac
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+        echo "result_file=$result" >> "$GITHUB_OUTPUT"
+        echo "result_sha256=$digest" >> "$GITHUB_OUTPUT"
+        {
+          echo '## DAIS Broken Link Scanner'
+          echo
+          echo "- Result: **$status**"
+          echo "- Documents scanned: **$DOCS**"
+          echo "- Explicit public HTTP(S) URLs observed at preflight: **$URLS**"
+          echo '- Network boundary: **GitHub-hosted runner only; private/link-local/loopback destinations excluded**'
+          echo '- Raw URLs and scanner diagnostics: **not retained in the public result**'
+          echo '- Scope: link reachability/reference validity only; not destination correctness, safety, or documentation quality.'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Fail closed on broken links or scanner errors
+      if: always() && steps.preflight.outcome == 'success' && steps.install.outcome == 'success' && steps.scan.outcome != 'success'
+      shell: bash
+      env:
+        EXIT_CODE: ${{ steps.scan.outputs.exit_code }}
+      run: |
+        if [[ "$EXIT_CODE" == '2' ]]; then
+          echo 'Broken link findings detected. Full URLs are intentionally suppressed from the public result.' >&2
+        else
+          echo 'Link scanner runtime/configuration error; no PASS claim is permitted.' >&2
+        fi
+        exit 1
