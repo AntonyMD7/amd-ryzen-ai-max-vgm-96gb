@@ -1,0 +1,75 @@
+name: DAIS README Lint Action
+description: Safe, pinned README-only Markdown linting built on markdownlint-cli2-action
+inputs:
+  root:
+    description: Relative directory containing README files to lint; no glob syntax or parent traversal
+    required: false
+    default: '.'
+outputs:
+  status:
+    description: PASS when every selected README satisfies the fixed DAIS profile
+    value: ${{ steps.result.outputs.status }}
+  readme-count:
+    description: Number of bounded README.md files accepted by preflight
+    value: ${{ steps.preflight.outputs.readme_count }}
+  upstream-commit:
+    description: Immutable markdownlint-cli2-action commit used by this release
+    value: '21c1be1b93ad9ed58fa840aacc3f279cde2a72ff'
+runs:
+  using: composite
+  steps:
+    - name: Bound and validate README scope
+      id: preflight
+      shell: bash
+      env:
+        P047_ROOT: ${{ inputs.root }}
+      run: |
+        set -euo pipefail
+        python "$GITHUB_ACTION_PATH/preflight.py" "$P047_ROOT"
+
+    - name: Run pinned upstream markdownlint-cli2 action without fixes
+      id: lint
+      continue-on-error: true
+      uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff
+      with:
+        config: ${{ github.action_path }}/.markdownlint-cli2.yaml
+        fix: 'false'
+        globs: |
+          ${{ inputs.root }}/**/README.md
+          !${{ inputs.root }}/**/node_modules/**
+          !${{ inputs.root }}/**/vendor/**
+          !${{ inputs.root }}/**/.venv/**
+          !${{ inputs.root }}/**/venv/**
+          !${{ inputs.root }}/**/dist/**
+          !${{ inputs.root }}/**/build/**
+
+    - name: Emit machine and human result
+      id: result
+      if: always() && steps.preflight.outcome == 'success'
+      shell: bash
+      env:
+        LINT_OUTCOME: ${{ steps.lint.outcome }}
+        README_COUNT: ${{ steps.preflight.outputs.readme_count }}
+      run: |
+        set -euo pipefail
+        if [[ "$LINT_OUTCOME" == "success" ]]; then
+          status=PASS
+        else
+          status=FAIL
+        fi
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+        {
+          echo '## DAIS README Lint'
+          echo
+          echo "- Result: **$status**"
+          echo "- README files checked: **$README_COUNT**"
+          echo '- Auto-fix: **disabled**'
+          echo '- Scope: README Markdown style/structure only; this is not documentation correctness or security proof.'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Fail closed on lint findings
+      if: always() && steps.preflight.outcome == 'success' && steps.lint.outcome != 'success'
+      shell: bash
+      run: |
+        echo 'README lint findings require review; no files were changed.' >&2
+        exit 1
