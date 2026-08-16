@@ -1,0 +1,131 @@
+name: P-051 P-057 completion v0.2.0
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p051-p057-completion-v0.2.0.yml'
+      - 'examples/public-build-completion-p051-v0.2.0.json'
+      - 'examples/public-build-completion-p057-v0.2.0.json'
+      - 'docs/P051-P057-COMPLETION-RECORD-v0.2.0.md'
+      - 'docs/GOVERNED-RELEASE-TOOLKIT.md'
+      - 'docs/DAIS-PUBLIC-BUILD-STATUS.md'
+      - 'tests/test_p051_p057_completion_records.py'
+      - 'scripts/public_build_completion_contract.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/p051-p057-completion-v0.2.0.yml'
+      - 'examples/public-build-completion-p051-v0.2.0.json'
+      - 'examples/public-build-completion-p057-v0.2.0.json'
+      - 'docs/P051-P057-COMPLETION-RECORD-v0.2.0.md'
+      - 'docs/GOVERNED-RELEASE-TOOLKIT.md'
+      - 'docs/DAIS-PUBLIC-BUILD-STATUS.md'
+      - 'tests/test_p051_p057_completion_records.py'
+      - 'scripts/public_build_completion_contract.py'
+
+permissions:
+  contents: read
+
+jobs:
+  independent-completion-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed completion source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Run completion-record regressions
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check 'pytest>=8,<9'
+          python -m pytest -q tests/test_public_build_completion_contract.py tests/test_p051_p057_completion_records.py
+
+      - name: Audit both canonical completion records independently
+        run: |
+          set -euo pipefail
+          python scripts/public_build_completion_contract.py examples/public-build-completion-p051-v0.2.0.json > p051-completion-audit.json
+          python scripts/public_build_completion_contract.py examples/public-build-completion-p057-v0.2.0.json > p057-completion-audit.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for subject, path in [('P-051','p051-completion-audit.json'),('P-057','p057-completion-audit.json')]:
+              d = json.loads(Path(path).read_text(encoding='utf-8'))
+              assert d['subject_id'] == subject
+              assert d['errors'] == []
+              assert d['readiness'] == 'COMPLETE_CONTRACT_SATISFIED'
+              assert d['completion_contract_satisfied'] is True
+              assert d['blocking_gates'] == []
+              assert d['gate_counts']['PASS'] == 19
+              assert d['safe_public_evidence_prefilter'] is True
+              print(f'{subject}_COMPLETION_CONTRACT=PASS')
+          PY
+
+      - name: Independently verify published release and public tag source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EXPECTED_SOURCE: 7fa66e4dd3d851b7fe6750cf7ee3d1f084d9811e
+        run: |
+          set -euo pipefail
+          gh release view v0.2.0 --repo "$REPO" --json isDraft,isPrerelease,tagName,name,targetCommitish,publishedAt,url > p051-p057-release-verification.json
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          expected = os.environ['EXPECTED_SOURCE']
+          repo = os.environ['REPO']
+          release = json.loads(Path('p051-p057-release-verification.json').read_text(encoding='utf-8'))
+          assert release['isDraft'] is False
+          assert release['isPrerelease'] is False
+          assert release['tagName'] == 'v0.2.0'
+          assert release['name'] == 'DAIS Governed Release Toolkit v0.2.0'
+          assert release['targetCommitish'] == expected
+          assert release['publishedAt']
+          raw = subprocess.check_output(
+              ['git','ls-remote','--tags',f'https://github.com/{repo}.git','refs/tags/v0.2.0'],
+              text=True,
+          ).strip()
+          parts = raw.split()
+          assert len(parts) == 2, raw
+          assert parts[0] == expected, (parts[0], expected)
+          out = {
+              'schema_version': '1.0',
+              'claim': 'P051_P057_PUBLIC_RELEASE_INDEPENDENT_VERIFICATION',
+              'release_tag': 'v0.2.0',
+              'expected_source': expected,
+              'resolved_public_tag_source': parts[0],
+              'release_target_commitish': release['targetCommitish'],
+              'published_at': release['publishedAt'],
+              'release_url': release['url'],
+              'exact_public_identity_verified': True,
+              'roadmap_completion_inferred_from_release_alone': False,
+          }
+          Path('p051-p057-public-release-evidence.json').write_text(json.dumps(out, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          print('PUBLIC_V0_2_0_EXACT_SOURCE=PASS')
+          PY
+
+      - name: Prove released product source remains retained
+        run: |
+          set -euo pipefail
+          git cat-file -e '7fa66e4dd3d851b7fe6750cf7ee3d1f084d9811e^{commit}'
+          echo 'RELEASED_PRODUCT_SOURCE_RETAINED=PASS'
+
+      - name: Retain sanitized independent completion evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p051-p057-completion-v0.2.0-${{ github.run_id }}
+          path: |
+            p051-completion-audit.json
+            p057-completion-audit.json
+            p051-p057-release-verification.json
+            p051-p057-public-release-evidence.json
+          retention-days: 30
+          if-no-files-found: error
