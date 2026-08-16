@@ -1,0 +1,142 @@
+{
+  "schema_version": "0.1",
+  "subject_id": "P-057",
+  "status": "COMPLETE",
+  "gates": {
+    "problem_and_intended_users_defined": {
+      "state": "PASS",
+      "evidence": ["docs/GOVERNED-RELEASE-TOOLKIT.md", "docs/RELEASE-GOVERNANCE.md", "docs/GOVERNED-RELEASE-START-HERE.md"],
+      "rationale": "The product documentation defines the governance problem: preserve exact reviewed release identity, least-privilege authority, recovery state and evidence without conflating publication with project completion.",
+      "applicability_reviewed": true
+    },
+    "public_repository_or_distribution_surface_exists": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb", "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/releases/tag/v0.2.0"],
+      "rationale": "The release-governance policy/tooling is public and versioned as part of DAIS Governed Release Toolkit v0.2.0.",
+      "applicability_reviewed": true
+    },
+    "explicit_open_source_license": {
+      "state": "PASS",
+      "evidence": ["LICENSE"],
+      "rationale": "The public repository contains the MIT License covering the governance/tooling source.",
+      "applicability_reviewed": true
+    },
+    "complete_readme": {
+      "state": "PASS",
+      "evidence": ["docs/GOVERNED-RELEASE-TOOLKIT.md", "docs/RELEASE-GOVERNANCE.md"],
+      "rationale": "Within the shared proving-ground repository, the product-scoped toolkit/governance documents form the complete README surface for P-057: problem, policy, states, controls, recovery, use, threats and limitations are explicit.",
+      "applicability_reviewed": true
+    },
+    "beginner_start_here_path": {
+      "state": "PASS",
+      "evidence": ["docs/GOVERNED-RELEASE-START-HERE.md"],
+      "rationale": "The dedicated start-here path explains the safe release lifecycle, permissions and recovery choices in plain operational language.",
+      "applicability_reviewed": true
+    },
+    "engineering_or_architecture_documentation": {
+      "state": "PASS",
+      "evidence": ["docs/RELEASE-GOVERNANCE.md", "docs/GOVERNED-RELEASE-TOOLKIT.md"],
+      "rationale": "Governance state transitions, authority separation, source identity, fail-closed rules, threat controls and release evidence semantics are documented.",
+      "applicability_reviewed": true
+    },
+    "reproducible_installation_or_use_instructions": {
+      "state": "PASS",
+      "evidence": ["docs/GOVERNED-RELEASE-START-HERE.md", "docs/GOVERNED-RELEASE-TOOLKIT.md", ".github/workflows/governed-release-toolkit-v0.2.0.yml"],
+      "rationale": "The public docs provide reproducible manifest/action usage and the repository retains the exact self-release workflow that exercised those governance controls.",
+      "applicability_reviewed": true
+    },
+    "safety_scope_and_limitations": {
+      "state": "PASS",
+      "evidence": ["docs/RELEASE-GOVERNANCE.md", "docs/GOVERNED-RELEASE-TOOLKIT.md", "RELEASE-NOTES-v0.2.0.md", "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md"],
+      "rationale": "Authority scope, publication non-claims, trusted-context requirements, no-overwrite policy and known v0.2.0 limits are explicit.",
+      "applicability_reviewed": true
+    },
+    "recovery_or_rollback_guidance_for_mutating_tools": {
+      "state": "PASS",
+      "evidence": ["docs/RELEASE-GOVERNANCE.md", "docs/GOVERNED-RELEASE-START-HERE.md", "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md"],
+      "rationale": "Governance defines recovery for pre-draft, unpublished-draft and post-publication uncertainty and rejects destructive tag/release rewriting as rollback.",
+      "applicability_reviewed": true
+    },
+    "tests_and_ci": {
+      "state": "PASS",
+      "evidence": ["tests/test_governed_release_toolkit.py", "tests/test_governed_release_manifest_paths.py", ".github/workflows/governed-release-toolkit-v0.2.0.yml", "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/actions/runs/31926735521"],
+      "rationale": "Adversarial governance tests and the dedicated public-release acceptance passed, including real composite-Action loading, read-only planning, trusted publication and independent tag verification.",
+      "applicability_reviewed": true
+    },
+    "security_and_privacy_review": {
+      "state": "PASS",
+      "evidence": ["SECURITY.md", "docs/RELEASE-GOVERNANCE.md", "docs/GOVERNED-RELEASE-TOOLKIT.md", ".github/ISSUE_TEMPLATE/governed-release-toolkit.yml", "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md"],
+      "rationale": "The review covers permission isolation, trusted event/ref identity, source ancestry, no overwrite/move, fixed-command execution, secret non-retention, untrusted contribution boundaries and safe public intake.",
+      "applicability_reviewed": true
+    },
+    "accessibility_review": {
+      "state": "PASS",
+      "evidence": ["docs/GOVERNED-RELEASE-START-HERE.md", "docs/GOVERNED-RELEASE-TOOLKIT.md", "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md"],
+      "rationale": "Text/JSON/YAML and explicit failure states were reviewed for keyboard/plain-language use. No WCAG or assistive-technology conformance is inferred from this review.",
+      "applicability_reviewed": true
+    },
+    "multilingual_path_considered": {
+      "state": "PASS",
+      "evidence": ["docs/GOVERNED-RELEASE-TOOLKIT.md", "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md"],
+      "rationale": "The governance and evidence model is language-neutral; human documentation is currently English-first and can be localized without changing canonical control semantics.",
+      "applicability_reviewed": true
+    },
+    "real_world_acceptance_test": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/actions/runs/31926735521", "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/releases/tag/v0.2.0", "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md"],
+      "rationale": "The governance path controlled a real public GitHub release end to end: read-only validation, isolated write authority, draft verification, publication, public tag verification and retained evidence.",
+      "applicability_reviewed": true
+    },
+    "evidence_retained": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/actions/runs/31926735521", "GitHub Actions artifact 9258058715 sha256 edd9b1fa5f61bb791e050eea4fc40786a83b87e8ae5be2a225c1c82efebe75e7", "GitHub Actions artifact 9258056770 sha256 f30dcdbbe3de0dfd5d2840acf473fbe111847de59813a0d3471f648feecfcde8", "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md"],
+      "rationale": "Exact public release/tag identity, read-only plan evidence, publication evidence, artifact digests and the permanent final governance record are retained.",
+      "applicability_reviewed": true
+    },
+    "version_tag_or_release_published": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/releases/tag/v0.2.0", "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md"],
+      "rationale": "Public non-draft v0.2.0 was published on 2026-08-16 and the public tag resolves exactly to reviewed source 7fa66e4dd3d851b7fe6750cf7ee3d1f084d9811e.",
+      "applicability_reviewed": true
+    },
+    "known_limitations_documented": {
+      "state": "PASS",
+      "evidence": ["docs/RELEASE-GOVERNANCE.md", "docs/GOVERNED-RELEASE-TOOLKIT.md", "RELEASE-NOTES-v0.2.0.md", "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md"],
+      "rationale": "GitHub-only backend, consequential write permission, external human release decision, no package/signing/artifact-goodness guarantee and language/accessibility limits are documented.",
+      "applicability_reviewed": true
+    },
+    "contribution_and_issue_paths": {
+      "state": "PASS",
+      "evidence": ["CONTRIBUTING.md", ".github/ISSUE_TEMPLATE/governed-release-toolkit.yml"],
+      "rationale": "Public contribution guidance and a dedicated sanitized governance/release issue path are available.",
+      "applicability_reviewed": true
+    },
+    "canonical_handover_or_build_record_updated": {
+      "state": "PASS",
+      "evidence": ["docs/P051-P057-COMPLETION-RECORD-v0.2.0.md", "docs/DAIS-PUBLIC-BUILD-STATUS.md"],
+      "rationale": "The final build record binds P-057 to exact released source, the real governance acceptance, retained evidence, red-team failures/fixes and explicit non-claims; public portfolio status is updated in the same reviewed tranche.",
+      "applicability_reviewed": true
+    }
+  },
+  "completion_record": {
+    "project": "Release Governance Tool",
+    "roadmap_id": "P-057",
+    "repository": "AntonyMD7/amd-ryzen-ai-max-vgm-96gb",
+    "public_url": "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/releases/tag/v0.2.0",
+    "version": "0.2.0",
+    "release_or_tag": "v0.2.0",
+    "completion_date": "2026-08-16",
+    "license": "MIT",
+    "ci_status": "PASS — governed generic release run 31926735521; validation and separately permissioned publication both passed",
+    "security_review": "PASS WITH DECLARED SCOPE — SECURITY.md; release governance/threat review; fail-closed trusted-context and exact-source acceptance",
+    "accessibility_review": "PASS WITH LIMITATIONS — text-first/keyboard/plain-language governance surfaces; no WCAG or human assistive-technology conformance claim",
+    "beginner_path_verified": "docs/GOVERNED-RELEASE-START-HERE.md",
+    "engineer_path_verified": "docs/RELEASE-GOVERNANCE.md + docs/GOVERNED-RELEASE-TOOLKIT.md + released tests/workflow",
+    "multilingual_status": "PATH CONSIDERED — language-neutral governance/evidence semantics; English-first operator documentation",
+    "real_world_test": "PASS — policy gates controlled actual public v0.2.0 publication and exact remote tag verification without bypassing the failed pre-release attempts",
+    "evidence_location": "GitHub run 31926735521; artifacts 9258058715 and 9258056770; public v0.2.0 release/tag; docs/P051-P057-COMPLETION-RECORD-v0.2.0.md",
+    "known_limitations": "GitHub Releases only; no branch-protection configuration, package/signing/artifact-goodness guarantee, WCAG conformance or multilingual user acceptance",
+    "handover": "docs/P051-P057-COMPLETION-RECORD-v0.2.0.md",
+    "final_status": "COMPLETE"
+  }
+}
