@@ -1,0 +1,171 @@
+name: P-047 README Lint v0.4.0 governed release
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p047-readme-lint-v0.4.0-release.yml'
+      - 'release/p047-readme-lint-v0.4.0.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/p047-readme-lint-v0.4.0-release.yml'
+      - 'release/p047-readme-lint-v0.4.0.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p047-readme-lint-v0.4.0-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed release-control source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Require exact P-047 source retained and ancestral
+        run: |
+          set -euo pipefail
+          source_commit="$(python -c "import json;print(json.load(open('release/p047-readme-lint-v0.4.0.json'))['source_commit'])")"
+          git cat-file -e "${source_commit}^{commit}"
+          git merge-base --is-ancestor "$source_commit" "$GITHUB_SHA"
+          for p in \
+            '.github/actions/readme-lint/action.yml' \
+            '.github/actions/readme-lint/.markdownlint-cli2.yaml' \
+            '.github/actions/readme-lint/preflight.py' \
+            'docs/P047-README-LINT-START-HERE.md' \
+            'docs/P047-README-LINT-ACTION.md' \
+            'RELEASE-NOTES-v0.4.0.md'; do
+            git cat-file -e "${source_commit}:${p}"
+          done
+          echo 'P047_EXACT_SOURCE_RETAINED=PASS'
+
+      - name: Re-run P-047 product contract tests
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input 'pytest>=8,<9'
+          python -m pytest -q tests/test_p047_readme_lint_contract.py
+
+      - name: Exercise governed release plan only
+        id: plan
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/p047-readme-lint-v0.4.0.json
+          publish: 'false'
+          evidence-file: p047-release-plan-evidence.json
+
+      - name: Assert release plan is non-mutating
+        env:
+          ACTION_STATUS: ${{ steps.plan.outputs.status }}
+        run: |
+          set -euo pipefail
+          test "$ACTION_STATUS" = READY_FOR_TRUSTED_PUSH
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('p047-release-plan-evidence.json').read_text())
+          assert d['mode']=='PLAN_ONLY'
+          assert d['published'] is False
+          assert d['draft_created'] is False
+          assert d['roadmap_completion_promoted'] is False
+          print('P047_RELEASE_PLAN=PASS')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+
+      - name: Retain sanitized release-plan evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p047-release-plan-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            p047-release-plan-evidence.json
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Publish exact P-047 source through governed release action
+        id: publish
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/p047-readme-lint-v0.4.0.json
+          publish: 'true'
+          allowed-ref: refs/heads/main
+          evidence-file: p047-publication-evidence.json
+
+      - name: Independently verify release and exact public tag target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(python -c "import json;print(json.load(open('release/p047-readme-lint-v0.4.0.json'))['tag'])")"
+          source_commit="$(python -c "import json;print(json.load(open('release/p047-readme-lint-v0.4.0.json'))['source_commit'])")"
+          title="$(python -c "import json;print(json.load(open('release/p047-readme-lint-v0.4.0.json'))['title'])")"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName,name,url,publishedAt > p047-public-release.json
+          python - "$tag" "$source_commit" "$title" <<'PY'
+          import json, os, subprocess, sys
+          from pathlib import Path
+          tag, source, title=sys.argv[1:]
+          release=json.loads(Path('p047-public-release.json').read_text())
+          assert release['isDraft'] is False
+          assert release['tagName']==tag
+          assert release['name']==title
+          assert release['publishedAt']
+          remote=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}.git"
+          subprocess.run(['git','fetch','--force',remote,f'refs/tags/{tag}:refs/tags/{tag}'],check=True)
+          resolved=subprocess.check_output(['git','rev-list','-n','1',tag],text=True).strip()
+          assert resolved==source,(resolved,source)
+          out={
+            'schema_version':'1.0',
+            'evidence_type':'p047-governed-release-publication',
+            'roadmap_id':'P-047',
+            'tag':tag,
+            'intended_source_commit':source,
+            'resolved_tag_commit':resolved,
+            'release_url':release['url'],
+            'published_at':release['publishedAt'],
+            'exact_tag_target_verified':True,
+            'roadmap_completion_promoted':False,
+            'released_ref_acceptance_required':True,
+            'final_completion_audit_required':True
+          }
+          Path('p047-independent-release-verification.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print('P047_GOVERNED_RELEASE=PASS')
+          print('P047_EXACT_PUBLIC_TAG=PASS')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+
+      - name: Retain publication evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p047-publication-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            p047-publication-evidence.json
+            p047-public-release.json
+            p047-independent-release-verification.json
+          retention-days: 30
+          if-no-files-found: error
