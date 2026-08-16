@@ -1,0 +1,133 @@
+name: P-047 released-ref consumer acceptance
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p047-released-ref-consumer-acceptance.yml'
+      - 'examples/public-build-completion-p047-v0.4.0.json'
+      - 'docs/P047-COMPLETION-RECORD-v0.4.0.md'
+      - 'tests/test_p047_completion_record.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/p047-released-ref-consumer-acceptance.yml'
+      - 'examples/public-build-completion-p047-v0.4.0.json'
+      - 'docs/P047-COMPLETION-RECORD-v0.4.0.md'
+      - 'tests/test_p047_completion_record.py'
+
+permissions:
+  contents: read
+
+jobs:
+  released-ref-consumers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout completion-audit source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          path: audit-source
+
+      - name: Verify public v0.4.0 tag resolves to exact reviewed P-047 source
+        working-directory: audit-source
+        run: |
+          set -euo pipefail
+          git fetch --force https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb.git refs/tags/v0.4.0:refs/tags/v0.4.0
+          resolved="$(git rev-list -n 1 v0.4.0)"
+          test "$resolved" = e8ec4a6f5dfbaadfaca46c98ad3679dce8e1ddd7
+          echo 'P047_RELEASE_TAG_IDENTITY=PASS'
+
+      - name: Checkout exact learning-git public consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/learning-git
+          ref: 01723a1825113de08810193f37e8047d978433c2
+          persist-credentials: false
+          path: consumer-learning
+
+      - name: Checkout exact Kimi-Haul public consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/Kimi-Haul
+          ref: 5905f5be3f812b801ab5f7ec5b33c65c166131fc
+          persist-credentials: false
+          path: consumer-kimi
+
+      - name: Record consumer README input hashes
+        run: |
+          set -euo pipefail
+          sha256sum consumer-learning/README.md > /tmp/p047-learning-before.sha256
+          sha256sum consumer-kimi/README.md > /tmp/p047-kimi-before.sha256
+
+      - name: Consume released P-047 against learning-git
+        id: learning
+        continue-on-error: true
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/readme-lint@v0.4.0
+        with:
+          root: consumer-learning
+
+      - name: Consume released P-047 against Kimi-Haul
+        id: kimi
+        continue-on-error: true
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/readme-lint@v0.4.0
+        with:
+          root: consumer-kimi
+
+      - name: Assert real-public-consumer semantics and immutability
+        env:
+          LEARNING_OUTCOME: ${{ steps.learning.outcome }}
+          LEARNING_STATUS: ${{ steps.learning.outputs.status }}
+          LEARNING_COUNT: ${{ steps.learning.outputs.readme-count }}
+          KIMI_OUTCOME: ${{ steps.kimi.outcome }}
+          KIMI_STATUS: ${{ steps.kimi.outputs.status }}
+          KIMI_COUNT: ${{ steps.kimi.outputs.readme-count }}
+        run: |
+          set -euo pipefail
+          sha256sum --check /tmp/p047-learning-before.sha256
+          sha256sum --check /tmp/p047-kimi-before.sha256
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          def validate(name, outcome, status, count):
+              if outcome == 'success':
+                  assert status == 'PASS', (name, outcome, status)
+              elif outcome == 'failure':
+                  assert status == 'FAIL', (name, outcome, status)
+              else:
+                  raise AssertionError((name, outcome, status))
+              n=int(count)
+              assert 1 <= n <= 250, (name, count)
+              return {'repository':name,'workflow_outcome':outcome,'lint_status':status,'readme_count':n}
+
+          consumers=[
+              validate('AntonyMD7/learning-git','${{ steps.learning.outcome }}','${{ steps.learning.outputs.status }}','${{ steps.learning.outputs.readme-count }}'),
+              validate('AntonyMD7/Kimi-Haul','${{ steps.kimi.outcome }}','${{ steps.kimi.outputs.status }}','${{ steps.kimi.outputs.readme-count }}'),
+          ]
+          evidence={
+              'schema_version':'1.0',
+              'roadmap_id':'P-047',
+              'release':'v0.4.0',
+              'released_source_commit':'e8ec4a6f5dfbaadfaca46c98ad3679dce8e1ddd7',
+              'consumers':consumers,
+              'consumer_commits':{
+                  'AntonyMD7/learning-git':'01723a1825113de08810193f37e8047d978433c2',
+                  'AntonyMD7/Kimi-Haul':'5905f5be3f812b801ab5f7ec5b33c65c166131fc'
+              },
+              'readme_input_mutation_performed':False,
+              'result_interpretation':'PASS means fixed-profile style acceptance; FAIL is an actionable lint finding, not workflow corruption.',
+              'roadmap_completion_promoted_by_consumer_test':False
+          }
+          Path('p047-released-ref-consumer-evidence.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n')
+          print('P047_RELEASED_REF_CONSUMERS=PASS')
+          print('P047_CONSUMER_INPUT_MUTATION=NO')
+          PY
+
+      - name: Retain released-ref consumer evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p047-released-ref-consumers-${{ github.run_id }}
+          path: p047-released-ref-consumer-evidence.json
+          retention-days: 30
+          if-no-files-found: error
