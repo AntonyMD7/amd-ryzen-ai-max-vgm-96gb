@@ -1,6 +1,6 @@
 # DAIS Governed Release Toolkit v0.2.0
 
-This release publishes the reusable public-good implementation for roadmap projects **P-051 — Release Automation Action** and **P-057 — Release Governance Tool** from exact reviewed source commit `c119631d29e68412aa15097d364fb50eb27d19e8`.
+This release publishes the reusable public-good implementation for roadmap projects **P-051 — Release Automation Action** and **P-057 — Release Governance Tool**. The governed release manifest and post-publication verifier bind the public `v0.2.0` tag to the exact reviewed product-source commit; the release workflow refuses source drift.
 
 ## What ships
 
