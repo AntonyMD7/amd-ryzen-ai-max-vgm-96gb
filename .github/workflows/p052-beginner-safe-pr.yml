@@ -1,0 +1,145 @@
+name: P-052 Beginner-Safe PR Creator acceptance
+
+on:
+  pull_request:
+    paths:
+      - '.github/actions/beginner-safe-pr/**'
+      - '.github/workflows/p052-beginner-safe-pr.yml'
+      - 'tests/test_p052_beginner_safe_pr.py'
+      - 'docs/P052-BEGINNER-SAFE-PR-START-HERE.md'
+      - 'docs/P052-BEGINNER-SAFE-PR.md'
+      - '.github/ISSUE_TEMPLATE/p052-beginner-safe-pr.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/actions/beginner-safe-pr/**'
+      - '.github/workflows/p052-beginner-safe-pr.yml'
+      - 'tests/test_p052_beginner_safe_pr.py'
+
+permissions:
+  contents: read
+
+jobs:
+  plan-mode-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout reviewed source without credential persistence
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Load Action in network-free ready plan mode
+        id: ready
+        uses: ./.github/actions/beginner-safe-pr
+        with:
+          mode: plan
+          repository: ${{ github.repository }}
+          title: Improve beginner documentation
+          summary: Adds a clearer START-HERE path and documents recovery expectations.
+          base: main
+          head: p052/synthetic-reviewed-change
+          tests-run: 'true'
+          ci-expected: 'true'
+          secrets-reviewed: 'true'
+          scope-reviewed: 'true'
+          rollback-considered: 'true'
+
+      - name: Require deterministic safe plan outputs
+        env:
+          DECISION: ${{ steps.ready.outputs.decision }}
+          PLAN_SHA256: ${{ steps.ready.outputs.plan-sha256 }}
+          CREATED: ${{ steps.ready.outputs.created }}
+          PR_NUMBER: ${{ steps.ready.outputs.pr-number }}
+          PR_URL: ${{ steps.ready.outputs.pr-url }}
+        run: |
+          set -euo pipefail
+          test "$DECISION" = READY_FOR_DRAFT_CREATE
+          [[ "$PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$CREATED" = false
+          test -z "$PR_NUMBER"
+          test -z "$PR_URL"
+          printf '%s\n' "$PLAN_SHA256" > /tmp/p052-plan-sha256
+
+      - name: Require missing safety review to fail closed
+        id: missing
+        continue-on-error: true
+        uses: ./.github/actions/beginner-safe-pr
+        with:
+          mode: create
+          repository: ${{ github.repository }}
+          title: Unsafe incomplete change
+          summary: This fixture intentionally omits required safety review.
+          base: main
+          head: p052/synthetic-reviewed-change
+          tests-run: 'false'
+          ci-expected: 'true'
+          secrets-reviewed: 'true'
+          scope-reviewed: 'true'
+          rollback-considered: 'true'
+          expected-plan-sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+          confirmation: CREATE_DRAFT_PR
+
+      - name: Require obvious secret-like public text to fail closed
+        id: secret
+        continue-on-error: true
+        uses: ./.github/actions/beginner-safe-pr
+        with:
+          mode: plan
+          repository: ${{ github.repository }}
+          title: Secret-like fixture
+          summary: 'password: CorrectHorseBatteryStaple'
+          base: main
+          head: p052/synthetic-reviewed-change
+          tests-run: 'true'
+          ci-expected: 'true'
+          secrets-reviewed: 'true'
+          scope-reviewed: 'true'
+          rollback-considered: 'true'
+
+      - name: Emit sanitized hosted acceptance evidence
+        env:
+          MISSING: ${{ steps.missing.outcome }}
+          SECRET: ${{ steps.secret.outcome }}
+        run: |
+          set -euo pipefail
+          test "$MISSING" = failure
+          test "$SECRET" = failure
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          evidence = {
+            'schema_version': '0.1',
+            'roadmap_id': 'P-052',
+            'tool_version': '0.7.0',
+            'source_commit': os.environ['GITHUB_SHA'],
+            'runner_scope': 'github-hosted-ubuntu-24.04',
+            'workflow_permissions': 'contents:read',
+            'ready_plan': 'PASS',
+            'plan_network_request_performed': False,
+            'plan_repository_mutation_performed': False,
+            'missing_safety_negative_control': os.environ['MISSING'],
+            'secret_like_text_negative_control': os.environ['SECRET'],
+            'create_mode_exercised': False,
+            'real_draft_pr_created': False,
+            'production_or_external_repository_authority_claimed': False,
+            'roadmap_completion_claimed': False,
+          }
+          Path('p052-hosted-plan-acceptance.json').write_text(json.dumps(evidence, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+          print('P052_PLAN_ACCEPTANCE=PASS')
+          print('P052_MUTATION_PERFORMED=NO')
+          print('ROADMAP_COMPLETION_CLAIMED=FALSE')
+          PY
+
+      - name: Retain sanitized P-052 source acceptance evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p052-plan-acceptance-${{ github.run_id }}
+          path: p052-hosted-plan-acceptance.json
+          retention-days: 14
+          if-no-files-found: error
