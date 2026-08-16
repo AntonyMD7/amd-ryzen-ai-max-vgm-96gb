@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "release_id": "DAIS-P053-ISSUE-TEMPLATE-GENERATOR-V0.8.0",
+  "roadmap_ids": ["P-053"],
+  "tag": "v0.8.0",
+  "title": "DAIS Issue Template Generator v0.8.0",
+  "source_commit": "2cbe70ae48d2813364f59aae180b3dcf92f7c9c3",
+  "notes_file": "docs/P053-RELEASE-NOTES-v0.8.0.md",
+  "required_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    ".github/actions/issue-template-generator/action.yml",
+    "scripts/issue_template_generator.py",
+    ".github/workflows/p053-issue-template-generator.yml",
+    ".github/ISSUE_TEMPLATE/p053-issue-template-generator.yml",
+    "examples/p053-issue-form-spec.json",
+    "docs/P053-ISSUE-TEMPLATE-GENERATOR-START-HERE.md",
+    "docs/P053-ISSUE-TEMPLATE-GENERATOR.md",
+    "docs/P053-RELEASE-NOTES-v0.8.0.md",
+    "tests/test_p053_issue_template_generator.py"
+  ],
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "post_publish_exact_tag_verification_required": true,
+  "roadmap_completion_on_publish": false,
+  "make_latest": true
+}
