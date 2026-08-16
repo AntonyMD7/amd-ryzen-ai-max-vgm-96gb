@@ -65,19 +65,39 @@ jobs:
           sha256sum /tmp/p058-dangerous/install.sh > /tmp/p058-dangerous.before
           sha256sum /tmp/p058-medium/cleanup.sh > /tmp/p058-medium.before
 
-      - name: Require clean fixture PASS
-        id: safe
+      - name: Require root escape to fail closed with sanitized evidence
+        id: escape
         uses: ./.github/actions/dangerous-script-detector
         with:
           root: ../../../../tmp/p058-safe
         continue-on-error: true
 
-      - name: Verify root escape is refused
+      - name: Verify root escape refusal evidence
         if: always()
+        env:
+          ESCAPE_OUTCOME: ${{ steps.escape.outcome }}
+          ESCAPE_STATUS: ${{ steps.escape.outputs.status }}
+          ESCAPE_RESULT: ${{ steps.escape.outputs.result-file }}
         run: |
           set -euo pipefail
-          test "${{ steps.safe.outcome }}" = failure
-          echo "P058_ROOT_CONTAINMENT_NEGATIVE=PASS"
+          test "$ESCAPE_OUTCOME" = failure
+          test "$ESCAPE_STATUS" = ERROR
+          test -s "$ESCAPE_RESULT"
+          cp "$ESCAPE_RESULT" p058-error-result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('p058-error-result.json').read_text())
+          assert data['status'] == 'ERROR'
+          assert data['privacy']['source_text_retained'] is False
+          assert data['privacy']['matched_text_retained'] is False
+          assert data['privacy']['absolute_paths_retained'] is False
+          assert data['privacy']['credentials_retained'] is False
+          assert data['claims']['repository_safe'] is False
+          assert data['claims']['script_safe_to_execute'] is False
+          print('P058_ROOT_CONTAINMENT_NEGATIVE=PASS')
+          print('P058_ERROR_EVIDENCE_RETAINED=TRUE')
+          PY
 
       - name: Create contained acceptance fixtures
         run: |
@@ -143,12 +163,13 @@ jobs:
           cp "$MEDIUM_RESULT" p058-medium-result.json
           python3 - <<'PY'
           import json
-          from pathlib import Path
+          from patlib import Path
           for name in ('p058-clean-result.json','p058-dangerous-result.json','p058-medium-result.json'):
               data=json.loads(Path(name).read_text())
               assert data['privacy']['source_text_retained'] is False
               assert data['privacy']['matched_text_retained'] is False
               assert data['privacy']['absolute_paths_retained'] is False
+              assert data['privacy']['credentials_retained'] is False
               assert data['claims']['repository_safe'] is False
               assert data['claims']['script_safe_to_execute'] is False
           dangerous=json.loads(Path('p058-dangerous-result.json').read_text())
@@ -165,6 +186,7 @@ jobs:
         with:
           name: p058-dangerous-script-${{ github.run_id }}
           path: |
+            p058-error-result.json
             p058-clean-result.json
             p058-dangerous-result.json
             p058-medium-result.json

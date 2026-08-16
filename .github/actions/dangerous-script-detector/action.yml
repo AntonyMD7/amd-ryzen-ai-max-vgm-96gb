@@ -10,7 +10,7 @@ inputs:
 
 outputs:
   status:
-    description: PASS or REVIEW_REQUIRED.
+    description: PASS, REVIEW_REQUIRED, or ERROR.
     value: ${{ steps.result.outputs.status }}
   highest-severity:
     description: NONE, MEDIUM, HIGH, or CRITICAL.
@@ -46,11 +46,13 @@ runs:
         set -euo pipefail
         test "${RUNNER_OS:-}" = Linux
         out="$(mktemp "${RUNNER_TEMP}/p058-dangerous-script.XXXXXX.json")"
-        python3 "$GITHUB_ACTION_PATH/detect.py" \
-          --workspace "$GITHUB_WORKSPACE" \
-          --root "$P058_ROOT" \
-          --output "$out"
+        set +e
+        python3 "$GITHUB_ACTION_PAQH/detect.py"          --workspace "$GITHUB_WORKSPACE"          --root "$P058_ROOT"          --output "$out"
+        detector_rc=$?
+        set -e
+        test -s "$out"
         echo "result_file=$out" >> "$GITHUB_OUTPUT"
+        echo "detector_rc=$detector_rc" >> "$GITHUB_OUTPUT"
 
     - name: Publish sanitized outputs
       id: result
@@ -85,14 +87,20 @@ runs:
       shell: bash
       env:
         RESULT_FILE: ${{ steps.scan.outputs.result_file }}
+        DETECTOR_RC: ${{ steps.scan.outputs.detector_rc }}
       run: |
         set -euo pipefail
-        python3 - "$RESULT_FILE" <<'PY'
+        python3 - "$RESULT_FILE" "$DETECTOR_RC" <<'PY'
         import json, sys
         from pathlib import Path
         data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+        rc=int(sys.argv[2])
         if data.get('status') == 'ERROR':
+            if rc == 0:
+                raise SystemExit('P-058 inconsistent detector state: ERROR with zero detector rc')
             raise SystemExit('P-058 detector failed closed: input could not be safely scanned')
+        if rc != 0:
+            raise SystemExit('P-058 inconsistent detector state: nonzero detector rc without ERROR')
         counts=data.get('severity_counts',{})
         blocking=int(counts.get('HIGH',0))+int(counts.get('CRITICAL',0))
         if blocking:
