@@ -1,0 +1,180 @@
+name: P-058 Dangerous Script Detector completion audit
+
+on:
+  pull_request:
+    paths:
+      - 'examples/public-build-completion-p058-v0.12.0.json'
+      - 'docs/P058-COMPLETION-RECORD-v0.12.0.md'
+      - '.github/workflows/p058-completion.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/public-build-completion-p058-v0.12.0.json'
+      - 'docs/P058-COMPLETION-RECORD-v0.12.0.md'
+      - '.github/workflows/p058-completion.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  completion-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout completion candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Re-run P-058 product tests and 19-gate completion audit
+        run: |
+          set -euo pipefail
+          python tests/test_p058_dangerous_script_detector.py
+          python - <<'PY'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          from public_build_completion_contract import audit_record
+          p=Path('examples/public-build-completion-p058-v0.12.0.json')
+          record=json.loads(p.read_text())
+          report=audit_record(record)
+          assert report['errors']==[]
+          assert report['declared_status']=='COMPLETE'
+          assert report['readiness']=='COMPLETE_CONTRACT_SATISFIED'
+          assert report['completion_contract_satisfied'] is True
+          assert report['blocking_gates']==[]
+          assert report['gate_counts']['PASS']==19
+          assert report['project_completion_record_populated'] is True
+          assert report['safe_public_evidence_prefilter'] is True
+          assert len(record['gates'])==19
+          assert all(v['state']=='PASS' and v.get('applicability_reviewed') is True for v in record['gates'].values())
+          Path('p058-final-contract-audit.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
+          print('P058_19_GATE_COMPLETION_CONTRACT=PASS')
+          PY
+
+      - name: Independently verify public v0.12.0 release and retained evidence identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v0.12.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,name,publishedAt,url > p058-final-release.json
+          git fetch --force "https://github.com/${GITHUB_REPOSITORY}.git" refs/tags/v0.12.0:refs/tags/v0.12.0
+          resolved="$(git rev-list -n 1 v0.12.0)"
+          test "$resolved" = '5ba437c2d39e60d59df43fe356b3727ea3ba319a'
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31947900033" > p058-source-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31947900033/artifacts" > p058-source-artifacts.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31948147029" > p058-release-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31948147029/artifacts" > p058-release-artifacts.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          release=json.loads(Path('p058-final-release.json').read_text())
+          assert release['isDraft'] is False and release['isPrerelease'] is False
+          assert release['tagName']=='v0.12.0'
+          assert release['name']=='DAIS Dangerous Script Detector v0.12.0'
+          assert release['publishedAt']=='2026-08-16T12:50:54Z'
+          source=json.loads(Path('p058-source-run.json').read_text())
+          assert source['id']==31947900033 and source['conclusion']=='success'
+          assert source['head_sha']=='5ba437c2d39e60d59df43fe356b3727ea3ba319a'
+          release_run=json.loads(Path('p058-release-run.json').read_text())
+          assert release_run['id']==31948147029 and release_run['conclusion']=='success'
+          assert release_run['head_sha']=='c4b6b848f676199a7f3d48fa0d28366549aadf3d'
+          sarts={a['name']:(str(a['id']),a.get('digest')) for a in json.loads(Path('p058-source-artifacts.json').read_text())['artifacts']}
+          assert sarts.get('p058-dangerous-script-31947900033')==('9263811361','sha256:ac7c01968c1a299dd0a3f5cc50e14689df241f43c752fd0891f25e1626ef66a4')
+          rarts={a['name']:(str(a['id']),a.get('digest')) for a in json.loads(Path('p058-release-artifacts.json').read_text())['artifacts']}
+          expected={
+            'p058-v0120-release-plan-31948147029':('9263877147','sha256:947657f6110bb5a936abdb57d4c5f915d45de490561e980640fcf39510f58d3c'),
+            'p058-v0120-publication-31948147029':('9263880389','sha256:347e08cf9488dd13f0a5c0ccd2f1def490de0b3f15d451d8a0df19edd1c40120'),
+            'p058-v0120-released-ref-31948147029':('9263882099','sha256:448fd183e84d75c0ac6574787a851586681dfb66b12a573f12f0ca8cf940b20f')
+          }
+          for name,want in expected.items(): assert rarts.get(name)==want,(name,rarts.get(name),want)
+          print('P058_FINAL_RELEASE_IDENTITY=PASS')
+          print('P058_EXACT_RELEASE_SOURCE=PASS')
+          print('P058_RELEASE_EVIDENCE_IDENTITY=PASS')
+          PY
+
+      - name: Checkout pinned real public consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/learning-git
+          ref: 01723a1825113de08810193f37e8047d978433c2
+          path: consumer-learning-git
+          persist-credentials: false
+
+      - name: Record consumer immutability baseline
+        run: |
+          set -euo pipefail
+          test "$(git -C consumer-learning-git rev-parse HEAD)" = '01723a1825113de08810193f37e8047d978433c2'
+          sha256sum consumer-learning-git/README.md > /tmp/p058-final-learning-before.sha256
+          test "$(git -C consumer-learning-git status --porcelain)" = ''
+
+      - name: Freshly consume released P-058 against real public repository
+        id: fresh
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/dangerous-script-detector@v0.12.0
+        with:
+          root: consumer-learning-git
+
+      - name: Require fresh released-ref acceptance and final attestation
+        env:
+          STATUS: ${{ steps.fresh.outputs.status }}
+          RESULT: ${{ steps.fresh.outputs.result-file }}
+          DIGEST: ${{ steps.fresh.outputs.result-sha256 }}
+        run: |
+          set -euo pipefail
+          test "$STATUS" = 'PASS'
+          [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          sha256sum --check /tmp/p058-final-learning-before.sha256
+          test "$(git -C consumer-learning-git status --porcelain)" = ''
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report=json.loads(Path(os.environ['RESULT']).read_text())
+          assert report['roadmap_id']=='P-058' and report['version']=='0.12.0'
+          assert report['finding_count']==0 and report['status']=='PASS'
+          assert report['mutation_performed'] is False
+          assert report['repository_code_executed'] is False
+          assert report['network_access_performed'] is False
+          assert report['privacy']['source_text_retained'] is False
+          assert report['privacy']['matched_text_retained'] is False
+          assert report['claims']['repository_safe'] is False
+          assert report['claims']['script_safe_to_execute'] is False
+          record=json.loads(Path('examples/public-build-completion-p058-v0.12.0.json').read_text())
+          assert record['status']=='COMPLETE'
+          attestation={
+            'schema_version':'1.0','evidence_type':'p058-final-completion-audit','roadmap_id':'P-058',
+            'release':'v0.12.0','released_source_commit':'5ba437c2d39e60d59df43fe356b3727ea3ba319a',
+            'release_control_commit':'c4b6b848f676199a7f3d48fa0d28366549aadf3d',
+            'consumer_repository':'AntonyMD7/learning-git','consumer_commit':'01723a1825113de08810193f37e8047d978433c2',
+            'status':os.environ['STATUS'],'fresh_report_sha256':os.environ['DIGEST'],
+            'input_mutation_performed':False,'repository_code_executed':False,'product_network_access_performed':False,
+            'source_text_retained':False,'repository_safety_claimed':False,'script_safety_claimed':False,
+            'historical_workflow_subroot_regression_acceptance':'PASS — release run 31948147029 artifact 9263882099',
+            'canonical_gate_count':19,'all_gates_pass':True,'flagship_completion_claimed':False,'adjacent_product_completion_claimed':False
+          }
+          Path('p058-final-completion-attestation.json').write_text(json.dumps(attestation,indent=2,sort_keys=True)+'\n')
+          print('P058_FINAL_REAL_PUBLIC_CONSUMER=PASS')
+          print('P058_FINAL_INPUT_MUTATION=NO')
+          print('P058_FINAL_PRIVACY_BOUNDARY=PASS')
+          PY
+
+      - name: Retain sanitized final completion evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p058-final-completion-${{ github.run_id }}
+          path: |
+            p058-final-contract-audit.json
+            p058-final-release.json
+            p058-source-run.json
+            p058-source-artifacts.json
+            p058-release-run.json
+            p058-release-artifacts.json
+            p058-final-completion-attestation.json
+          retention-days: 30
+          if-no-files-found: error
