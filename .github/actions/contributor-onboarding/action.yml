@@ -39,7 +39,9 @@ runs:
           en|es) ;;
           *) echo "Unsupported P-054 language" >&2; exit 2 ;;
         esac
-        out="${RUNNER_TEMP}/p054-onboarding-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
+        # Keep language variants isolated so multiple invocations in one job cannot
+        # overwrite another invocation's report/guide before independent verification.
+        out="${RUNNER_TEMP}/p054-onboarding-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}-${P054_LANGUAGE}"
         rm -rf "$out"
         mkdir -p "$out"
         result="$(python "${GITHUB_ACTION_PATH}/../../../scripts/p054_contributor_onboarding.py" --root "$P054_ROOT" --language "$P054_LANGUAGE" --out-dir "$out")"
