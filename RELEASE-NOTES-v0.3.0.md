@@ -16,10 +16,17 @@ This release packages the DAIS Universal Evidence schema/hash validator as a bou
 - CI outputs for status, failure counts, verified count, report path and report SHA-256;
 - Linux x64 / CPython 3.12 runtime gate;
 - complete hash-locked binary-wheel dependency graph;
+- dependency-clean hosted acceptance that exercises the Action before validation packages are present;
 - positive exact-hash and required traversal negative-control CI;
 - real GitHub signed-attestation interoperability for the exact validator report with independent `gh attestation verify`;
 - beginner, engineer, privacy, recovery, accessibility and multilingual-path documentation;
 - dedicated privacy-safe public support issue form.
+
+## Pre-release red-team finding fixed
+
+The first canonical-main attestation interoperability run exposed a defect that ordinary PR testing had masked: `referencing==0.37.0` depends on `typing-extensions>=4.4.0`, but the initial `--require-hashes` lock omitted that transitive package. The PR lane had already installed the dependency while preparing unit tests, so its composite-Action exercise did not prove a clean installation.
+
+v0.3.0 permanently fixes that gap by pinning `typing-extensions==4.16.0` with its exact PyPI wheel SHA-256, verifying its installed version, and adding a fresh-runner lane that first proves `jsonschema` is absent before invoking the Action. No runtime, hash, or fail-closed gate was weakened.
 
 ## What PASS means
 
