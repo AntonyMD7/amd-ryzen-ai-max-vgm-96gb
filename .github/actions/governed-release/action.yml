@@ -1,0 +1,83 @@
+name: DAIS Governed Release
+description: Validate and optionally publish an exact-source draft-then-publish GitHub release under fail-closed DAIS guards.
+author: AntonyMD7
+
+inputs:
+  manifest:
+    description: Repository-relative path to the reviewed governed-release manifest.
+    required: true
+  publish:
+    description: Set to true only in a trusted push workflow with contents: write.
+    required: false
+    default: 'false'
+  allowed-ref:
+    description: Exact trusted Git ref allowed to publish.
+    required: false
+    default: refs/heads/main
+  evidence-file:
+    description: Repository-relative output path for sanitized release evidence.
+    required: false
+    default: governed-release-evidence.json
+
+outputs:
+  status:
+    description: Final fail-closed action status.
+    value: ${{ steps.result.outputs.status }}
+  evidence-file:
+    description: Path to sanitized release evidence.
+    value: ${{ inputs.evidence-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate governed release manifest
+      shell: bash
+      env:
+        ACTION_ROOT: ${{ github.action_path }}
+        MANIFEST: ${{ inputs.manifest }}
+        EVIDENCE_FILE: ${{ inputs.evidence-file }}
+      run: |
+        set -euo pipefail
+        tool_root="$(cd "$ACTION_ROOT/../../.." && pwd)"
+        python3 "$tool_root/scripts/governed_release_manifest.py" \
+          "$MANIFEST" \
+          --repo-root "$GITHUB_WORKSPACE" \
+          --output governed-release-manifest-validation.json
+
+    - name: Plan or execute governed release
+      id: execute
+      shell: bash
+      env:
+        ACTION_ROOT: ${{ github.action_path }}
+        MANIFEST: ${{ inputs.manifest }}
+        PUBLISH: ${{ inputs.publish }}
+        ALLOWED_REF: ${{ inputs.allowed-ref }}
+        EVIDENCE_FILE: ${{ inputs.evidence-file }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        tool_root="$(cd "$ACTION_ROOT/../../.." && pwd)"
+        args=("$MANIFEST" --repo-root "$GITHUB_WORKSPACE" --allowed-ref "$ALLOWED_REF" --evidence "$EVIDENCE_FILE")
+        case "$PUBLISH" in
+          true) args+=(--execute) ;;
+          false) ;;
+          *) echo "publish must be exactly true or false" >&2; exit 2 ;;
+        esac
+        python3 "$tool_root/scripts/governed_release_publish.py" "${args[@]}"
+
+    - name: Export sanitized status
+      id: result
+      shell: bash
+      env:
+        EVIDENCE_FILE: ${{ inputs.evidence-file }}
+      run: |
+        set -euo pipefail
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import json, os
+        from pathlib import Path
+        data = json.loads(Path(os.environ['EVIDENCE_FILE']).read_text(encoding='utf-8'))
+        status = str(data.get('status', 'UNKNOWN'))
+        if '\n' in status or '\r' in status:
+            raise SystemExit('unsafe status output')
+        print(f'status={status}')
+        PY
