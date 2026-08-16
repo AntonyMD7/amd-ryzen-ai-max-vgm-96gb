@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "release_id": "DAIS-GOVERNED-RELEASE-TOOLKIT-V0.2.0",
+  "roadmap_ids": ["P-051", "P-057"],
+  "tag": "v0.2.0",
+  "title": "DAIS Governed Release Toolkit v0.2.0",
+  "source_commit": "c119631d29e68412aa15097d364fb50eb27d19e8",
+  "notes_file": "RELEASE-NOTES-v0.2.0.md",
+  "required_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "docs/GOVERNED-RELEASE-TOOLKIT.md",
+    "docs/RELEASE-GOVERNANCE.md",
+    ".github/actions/governed-release/action.yml",
+    "scripts/governed_release_manifest.py",
+    "scripts/governed_release_publish.py",
+    "tests/test_governed_release_toolkit.py",
+    "RELEASE-NOTES-v0.2.0.md"
+  ],
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "post_publish_exact_tag_verification_required": true,
+  "roadmap_completion_on_publish": false,
+  "make_latest": true
+}
