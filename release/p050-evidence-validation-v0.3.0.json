@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "release_id": "P050-EVIDENCE-VALIDATION-V0.3.0",
+  "roadmap_ids": ["P-050"],
+  "tag": "v0.3.0",
+  "title": "DAIS Evidence Validation Action v0.3.0",
+  "source_commit": "f00ad749a07a9067075c87f5ca20feab04695288",
+  "notes_file": "RELEASE-NOTES-v0.3.0.md",
+  "required_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "docs/P050-EVIDENCE-VALIDATION-START-HERE.md",
+    "docs/EVIDENCE-VALIDATION-ACTION.md",
+    ".github/ISSUE_TEMPLATE/p050-evidence-validation.yml",
+    ".github/actions/evidence-validate/action.yml",
+    ".github/actions/evidence-validate/requirements-linux-x64-py312.lock",
+    "scripts/evidence_validate.py",
+    "schemas/universal-evidence-v0.1.schema.json",
+    "tests/test_evidence_validate.py",
+    ".github/workflows/p050-evidence-validation-action.yml",
+    ".github/workflows/p050-clean-runtime-acceptance.yml",
+    "RELEASE-NOTES-v0.3.0.md"
+  ],
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "post_publish_exact_tag_verification_required": true,
+  "roadmap_completion_on_publish": false,
+  "make_latest": true
+}
