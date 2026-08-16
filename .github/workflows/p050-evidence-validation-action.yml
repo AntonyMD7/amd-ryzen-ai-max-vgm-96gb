@@ -1,0 +1,133 @@
+name: P-050 Evidence Validation Action acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/evidence_validate.py'
+      - 'schemas/universal-evidence-v0.1.schema.json'
+      - 'examples/universal-evidence-*.json'
+      - 'tests/test_evidence_validate.py'
+      - '.github/actions/evidence-validate/**'
+      - '.github/workflows/p050-evidence-validation-action.yml'
+      - 'docs/EVIDENCE-VALIDATION-ACTION.md'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/evidence_validate.py'
+      - 'schemas/universal-evidence-v0.1.schema.json'
+      - 'examples/universal-evidence-*.json'
+      - 'tests/test_evidence_validate.py'
+      - '.github/actions/evidence-validate/**'
+      - '.github/workflows/p050-evidence-validation-action.yml'
+      - 'docs/EVIDENCE-VALIDATION-ACTION.md'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0' 'pytest>=8,<9'
+
+      - name: Compile and run adversarial unit tests
+        run: |
+          python -m compileall -q scripts tests
+          python -m pytest -q tests/test_evidence_validate.py
+
+      - name: Build exact-hash acceptance fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p050-artifacts"
+          printf 'P-050 public acceptance fixture\n' > "$RUNNER_TEMP/p050-artifacts/result.txt"
+          python - "$RUNNER_TEMP/p050-artifacts/result.txt" "$RUNNER_TEMP/p050-valid.json" <<'PY'
+          import copy
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          artifact = Path(sys.argv[1])
+          output = Path(sys.argv[2])
+          record = json.loads(Path('examples/universal-evidence-readonly-example.json').read_text(encoding='utf-8'))
+          record['artifacts'] = [{
+              'name': 'result.txt',
+              'sha256': hashlib.sha256(artifact.read_bytes()).hexdigest(),
+              'media_type': 'text/plain',
+          }]
+          output.write_text(json.dumps(record, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Exercise reusable action with real artifact hash
+        id: positive
+        uses: ./.github/actions/evidence-validate
+        with:
+          evidence: ${{ runner.temp }}/p050-valid.json
+          artifact-root: ${{ runner.temp }}/p050-artifacts
+          max-artifacts: '8'
+          max-artifact-bytes: '1048576'
+
+      - name: Assert machine-readable outputs
+        shell: bash
+        env:
+          STATUS: ${{ steps.positive.outputs.status }}
+          SCHEMA_ERRORS: ${{ steps.positive.outputs.schema-error-count }}
+          ARTIFACT_FAILURES: ${{ steps.positive.outputs.artifact-failure-count }}
+          VERIFIED: ${{ steps.positive.outputs.verified-artifact-count }}
+          REPORT_SHA: ${{ steps.positive.outputs.report-sha256 }}
+        run: |
+          set -euo pipefail
+          test "$STATUS" = PASS
+          test "$SCHEMA_ERRORS" = 0
+          test "$ARTIFACT_FAILURES" = 0
+          test "$VERIFIED" = 1
+          printf '%s' "$REPORT_SHA" | grep -Eq '^[0-9a-f]{64}$'
+          echo 'P050_POSITIVE_ACTION_ACCEPTANCE=PASS'
+
+      - name: Build traversal negative control
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/p050-negative.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          record = json.loads(Path('examples/universal-evidence-readonly-example.json').read_text(encoding='utf-8'))
+          record['artifacts'] = [{'name': '../escape.txt', 'sha256': '0' * 64, 'media_type': 'text/plain'}]
+          Path(sys.argv[1]).write_text(json.dumps(record, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+      - name: Require reusable action to fail closed on traversal
+        id: negative
+        continue-on-error: true
+        uses: ./.github/actions/evidence-validate
+        with:
+          evidence: ${{ runner.temp }}/p050-negative.json
+          artifact-root: ${{ runner.temp }}/p050-artifacts
+
+      - name: Assert negative control failed
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.negative.outcome }}
+          STATUS: ${{ steps.negative.outputs.status }}
+          FAILURES: ${{ steps.negative.outputs.artifact-failure-count }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure
+          test "$STATUS" = FAIL
+          test "$FAILURES" -ge 1
+          echo 'P050_TRAVERSAL_NEGATIVE_CONTROL=PASS'
+          echo 'CLAIMED_EVENT_PROVEN=FALSE'
+          echo 'PRODUCER_IDENTITY_VERIFIED=FALSE'
+          echo 'ROADMAP_COMPLETION_CLAIMED=FALSE'
