@@ -1,0 +1,17 @@
+# P-050 Evidence Validation Action runtime lock
+# Supported release scope: GitHub-hosted Linux x64 with CPython 3.12.
+# Every distribution is exact-version pinned and SHA-256 bound.
+# `pip install --require-hashes --only-binary=:all:` must be used.
+#
+# Primary artifact identities were reviewed against PyPI release metadata.
+
+jsonschema==4.26.0 \
+    --hash=sha256:d489f15263b8d200f8387e64b4c3a75f06629559fb73deb8fdfb525f2dab50ce
+attrs==25.3.0 \
+    --hash=sha256:427318ce031701fea540783410126f03899a97ffc6f61596ad581ac2e40e3bc3
+jsonschema-specifications==2025.9.1 \
+    --hash=sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe
+referencing==0.37.0 \
+    --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231
+rpds-py==0.27.1 \
+    --hash=sha256:466bfe65bd932da36ff279ddd92de56b042f2266d752719beb97b08526268ec5
