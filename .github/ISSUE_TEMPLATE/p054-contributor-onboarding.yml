@@ -1,0 +1,43 @@
+name: P-054 Contributor Onboarding Assistant support
+description: Report a reproducible problem with the public P-054 onboarding audit or guidance.
+title: "[P-054] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve P-054. Please use synthetic or public-safe reproduction details only.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Local audit
+        - Composite Action
+        - English guide
+        - Spanish guide
+        - Privacy or security boundary
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Describe bounded public-safe file names/states and the observed status. Do not paste private file contents.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I removed credentials, tokens, private repository content, personal or medical data, private network details, usernames/hostnames/IP addresses, and private filesystem paths.
+          required: true
+        - label: I understand P-054 is a local onboarding-surface audit and does not verify GitHub Community Standards, policy correctness, contributor trust, or accessibility conformance.
+          required: true

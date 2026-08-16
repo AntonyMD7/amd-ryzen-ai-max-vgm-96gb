@@ -1,0 +1,57 @@
+name: DAIS Contributor Onboarding Assistant
+description: Read-only contributor onboarding audit with deterministic English/Spanish guidance and no repository/API mutation.
+inputs:
+  root:
+    description: Repository checkout root to audit.
+    required: false
+    default: .
+  language:
+    description: Guidance language (en or es).
+    required: false
+    default: en
+outputs:
+  status:
+    description: ONBOARDING_BASELINE_READY or ONBOARDING_BASELINE_HAS_GAPS.
+    value: ${{ steps.audit.outputs.status }}
+  missing-required-count:
+    description: Number of missing required onboarding surfaces.
+    value: ${{ steps.audit.outputs.missing-required-count }}
+  report-sha256:
+    description: Deterministic SHA-256 over the sanitized report contract.
+    value: ${{ steps.audit.outputs.report-sha256 }}
+  report-path:
+    description: Runner-temporary JSON report path.
+    value: ${{ steps.audit.outputs.report-path }}
+  guide-path:
+    description: Runner-temporary Markdown guide path.
+    value: ${{ steps.audit.outputs.guide-path }}
+runs:
+  using: composite
+  steps:
+    - id: audit
+      shell: bash
+      env:
+        P054_ROOT: ${{ inputs.root }}
+        P054_LANGUAGE: ${{ inputs.language }}
+      run: |
+        set -euo pipefail
+        case "$P054_LANGUAGE" in
+          en|es) ;;
+          *) echo "Unsupported P-054 language" >&2; exit 2 ;;
+        esac
+        out="${RUNNER_TEMP}/p054-onboarding-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}"
+        rm -rf "$out"
+        mkdir -p "$out"
+        result="$(python "${GITHUB_ACTION_PATH}/../../../scripts/p054_contributor_onboarding.py" --root "$P054_ROOT" --language "$P054_LANGUAGE" --out-dir "$out")"
+        RESULT="$result" python - <<'PY' >> "$GITHUB_OUTPUT"
+        import json, os
+        d=json.loads(os.environ['RESULT'])
+        print(f"status={d['status']}")
+        print(f"missing-required-count={d['missing_required_count']}")
+        print(f"report-sha256={d['report_sha256']}")
+        print(f"report-path={d['report_path']}")
+        print(f"guide-path={d['guide_path']}")
+        PY
+        if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+          cat "$out/p054-onboarding-guide.md" >> "$GITHUB_STEP_SUMMARY"
+        fi
