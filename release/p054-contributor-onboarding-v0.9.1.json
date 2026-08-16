@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0",
-  "release_id": "DAIS-P054-CONTRIBUTOR-ONBOARDING-V0.9.0",
+  "release_id": "DAIS-P054-CONTRIBUTOR-ONBOARDING-V0.9.1",
   "roadmap_ids": ["P-054"],
-  "tag": "v0.9.0",
-  "title": "DAIS Contributor Onboarding Assistant v0.9.0",
-  "source_commit": "290c358fb1569c85c6c9082efea2baefb30c5c75",
-  "notes_file": "docs/P054-RELEASE-NOTES-v0.9.0.md",
+  "tag": "v0.9.1",
+  "title": "DAIS Contributor Onboarding Assistant v0.9.1",
+  "source_commit": "082b41527f016058ff8c199b43beaca3e716c390",
+  "notes_file": "docs/P054-RELEASE-NOTES-v0.9.1.md",
   "required_files": [
     "README.md",
     "LICENSE",
@@ -17,7 +17,7 @@
     ".github/ISSUE_TEMPLATE/p054-contributor-onboarding.yml",
     "docs/P054-CONTRIBUTOR-ONBOARDING-START-HERE.md",
     "docs/P054-CONTRIBUTOR-ONBOARDING.md",
-    "docs/P054-RELEASE-NOTES-v0.9.0.md",
+    "docs/P054-RELEASE-NOTES-v0.9.1.md",
     "tests/test_p054_contributor_onboarding.py"
   ],
   "publication_mode": "DRAFT_THEN_PUBLISH",

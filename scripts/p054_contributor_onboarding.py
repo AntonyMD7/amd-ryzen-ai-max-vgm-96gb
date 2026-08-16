@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-VERSION = "0.9.0"
+VERSION = "0.9.1"
 MAX_FILE_BYTES = 1024 * 1024
 SUPPORTED_LANGUAGES = {"en", "es"}
 

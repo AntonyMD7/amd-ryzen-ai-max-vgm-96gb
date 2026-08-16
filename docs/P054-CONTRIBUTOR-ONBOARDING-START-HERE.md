@@ -1,8 +1,9 @@
 # DAIS Contributor Onboarding Assistant — Start Here
 
 Roadmap ID: **P-054**  
-Candidate version: **0.9.0**  
-Status: **IN PROGRESS — source productization candidate, not yet released or COMPLETE**
+Current release: **v0.9.0 — released, but not completion-accepted**  
+Patch candidate: **v0.9.1**  
+Status: **IN PROGRESS**
 
 ## What it does
 
@@ -15,9 +16,13 @@ P-054 gives maintainers and first-time contributors a small, deterministic onboa
 
 It does **not** post comments, create issues, add labels, invite collaborators, run repository code, call the GitHub API, or change the repository.
 
-## Quick local use
+## Why v0.9.1 exists
 
-From this repository:
+The first released-ref acceptance of `v0.9.0` deliberately exercised English and Spanish invocations in the same GitHub Actions job. That test exposed an output-isolation defect: both languages used the same runner-temporary directory, so the later Spanish invocation could overwrite the earlier English report/guide path before independent verification. The release remained **not COMPLETE**.
+
+`v0.9.1` permanently fixes this by including the language in the runner-temporary output directory and adds a regression acceptance that requires English and Spanish output paths to be distinct while preserving the same underlying technical truth state.
+
+## Quick local use
 
 ```bash
 python scripts/p054_contributor_onboarding.py \
@@ -26,16 +31,7 @@ python scripts/p054_contributor_onboarding.py \
   --out-dir /tmp/p054-onboarding
 ```
 
-The output directory must be outside the audited repository. This prevents a read-only audit from quietly becoming a repository change.
-
-Spanish guidance:
-
-```bash
-python scripts/p054_contributor_onboarding.py \
-  --root /path/to/public-repository \
-  --language es \
-  --out-dir /tmp/p054-onboarding-es
-```
+The output directory must be outside the audited repository. Spanish guidance uses `--language es` and a separate output directory.
 
 ## GitHub Action use
 
@@ -49,7 +45,7 @@ steps:
       persist-credentials: false
 
   - id: onboarding
-    uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/contributor-onboarding@<reviewed-ref>
+    uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/contributor-onboarding@<released-version>
     with:
       root: .
       language: en
@@ -57,7 +53,7 @@ steps:
   - run: echo "${{ steps.onboarding.outputs.status }}"
 ```
 
-Until a versioned P-054 release exists, pin a reviewed commit. Do not treat this candidate as a released product yet.
+Do not use `v0.9.0` as completion evidence. Use the later patch release only after its released-ref acceptance is green.
 
 ## What is checked
 
@@ -92,15 +88,15 @@ P-054 itself performs no network request and emits no audited absolute filesyste
 
 ## Recovery
 
-The product is read-only. Delete the runner-temporary/output reports and rerun. If a maintainer later changes community-health files based on the report, normal Git review/revert is the recovery path; P-054 does not make those changes.
+The product is read-only. Delete runner-temporary/output reports and rerun. If a maintainer later changes community-health files based on the report, normal Git review/revert is the recovery path; P-054 does not make those changes.
 
-## Current completion boundary
+## Completion boundary
 
-This tranche is not a completion claim. Before P-054 can become COMPLETE it still needs at minimum:
+P-054 remains IN PROGRESS until the patch is released and independently accepted. Completion still requires:
 
 - green adversarial and hosted Action CI;
-- exact-source versioned public release;
-- released-ref real-public consumer acceptance;
+- exact-source patch release;
+- released-ref real-public English/Spanish consumer acceptance with output isolation;
 - retained evidence;
 - final 19-gate completion audit and handover;
 - fresh post-merge verification;
