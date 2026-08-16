@@ -1,0 +1,201 @@
+name: 'DAIS Secret Exposure Detection'
+description: 'Bounded working-tree secret detection with fixed Gitleaks policy and privacy-minimized evidence.'
+inputs:
+  root:
+    description: 'Relative directory under GITHUB_WORKSPACE to scan. Git history is never scanned.'
+    required: false
+    default: '.'
+outputs:
+  status:
+    description: 'PASS when no findings are observed; FINDINGS or ERROR otherwise.'
+    value: ${{ steps.scan.outputs.status }}
+  finding-count:
+    description: 'Number of findings in the sanitized result.'
+    value: ${{ steps.scan.outputs.finding-count }}
+  rule-count:
+    description: 'Number of distinct Gitleaks rule IDs observed.'
+    value: ${{ steps.scan.outputs.rule-count }}
+  file-count:
+    description: 'Number of bounded regular files staged for the scan.'
+    value: ${{ steps.scan.outputs.file-count }}
+  result-file:
+    description: 'Path to the sanitized JSON result. Raw findings are deleted.'
+    value: ${{ steps.scan.outputs.result-file }}
+  result-sha256:
+    description: 'SHA-256 of the sanitized JSON result.'
+    value: ${{ steps.scan.outputs.result-sha256 }}
+  gitleaks-version:
+    description: 'Pinned upstream engine version.'
+    value: ${{ steps.scan.outputs.gitleaks-version }}
+runs:
+  using: composite
+  steps:
+    - name: Enforce supported runner and install exact Gitleaks artifact
+      id: install
+      shell: bash
+      env:
+        DAIS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+      run: |
+        set -euo pipefail
+        if [ "${DAIS_RUNNER_ENVIRONMENT}" != 'github-hosted' ]; then
+          echo '::error::P-049 v0.6.0 refuses self-hosted execution because repository-controlled content must not gain a network or filesystem oracle.'
+          exit 2
+        fi
+        if [ "${RUNNER_OS:-}" != 'Linux' ] || [ "${RUNNER_ARCH:-}" != 'X64' ]; then
+          echo '::error::P-049 v0.6.0 supports GitHub-hosted Linux x64 only.'
+          exit 2
+        fi
+        work="${RUNNER_TEMP}/dais-p049-${GITHUB_RUN_ID:-run}-${GITHUB_RUN_ATTEMPT:-0}"
+        rm -rf "$work"
+        mkdir -p "$work/tool"
+        archive="$work/gitleaks.tar.gz"
+        url='https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_linux_x64.tar.gz'
+        expected='79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e'
+        curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error --retry 3 --retry-all-errors "$url" -o "$archive"
+        printf '%s  %s\n' "$expected" "$archive" | sha256sum --check --status
+        python3 - "$archive" "$work/tool/gitleaks" <<'PY'
+        import os, sys, tarfile
+        from pathlib import PurePosixPath
+        archive, target = sys.argv[1:]
+        with tarfile.open(archive, 'r:gz') as tf:
+            members = tf.getmembers()
+            for m in members:
+                p = PurePosixPath(m.name)
+                if p.is_absolute() or '..' in p.parts:
+                    raise SystemExit('unsafe archive member refused')
+            candidates = [m for m in members if m.isfile() and PurePosixPath(m.name).name == 'gitleaks']
+            if len(candidates) != 1:
+                raise SystemExit('expected exactly one gitleaks executable in archive')
+            src = tf.extractfile(candidates[0])
+            if src is None:
+                raise SystemExit('unable to read gitleaks executable')
+            data = src.read()
+        with open(target, 'wb') as out:
+            out.write(data)
+        os.chmod(target, 0o700)
+        PY
+        observed="$($work/tool/gitleaks version | tr -d '\r\n')"
+        test "$observed" = '8.30.0'
+        echo "work=$work" >> "$GITHUB_OUTPUT"
+        echo "tool=$work/tool/gitleaks" >> "$GITHUB_OUTPUT"
+        echo 'version=8.30.0' >> "$GITHUB_OUTPUT"
+        echo 'P049_GITLEAKS_ASSET_SHA256=PASS'
+        echo 'P049_GITLEAKS_VERSION=8.30.0'
+
+    - name: Require live detector canary before scanning repository content
+      shell: bash
+      env:
+        TOOL: ${{ steps.install.outputs.tool }}
+        WORK: ${{ steps.install.outputs.work }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$WORK/canary/leak" "$WORK/canary/clean"
+        python3 - "$WORK/canary/leak/canary.txt" <<'PY'
+        from pathlib import Path
+        import sys
+        # Construct at runtime so the repository itself never stores a complete token-like fixture.
+        token = 'ghp_' + 'aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789'
+        Path(sys.argv[1]).write_text('runtime_canary=' + token + '\n', encoding='utf-8')
+        PY
+        printf 'ordinary public documentation\n' > "$WORK/canary/clean/clean.txt"
+        printf '[]\n' > "$WORK/canary-leak.json"
+        set +e
+        "$TOOL" dir "$WORK/canary/leak" \
+          --config "$GITHUB_ACTION_PATH/gitleaks.toml" \
+          --gitleaks-ignore-path "$GITHUB_ACTION_PATH/.gitleaksignore" \
+          --ignore-gitleaks-allow --redact=100 --no-banner --no-color \
+          --max-archive-depth=0 --max-decode-depth=0 --max-target-megabytes=10 \
+          --report-format json --report-path "$WORK/canary-leak.json" \
+          >"$WORK/canary-leak.stdout" 2>"$WORK/canary-leak.stderr"
+        leak_rc=$?
+        set -e
+        test "$leak_rc" = 1
+        python3 - "$WORK/canary-leak.json" <<'PY'
+        import json, sys
+        from pathlib import Path
+        data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+        assert isinstance(data, list) and len(data) >= 1
+        assert any(str(x.get('RuleID','')).lower() == 'github-pat' for x in data)
+        print('P049_DETECTION_CANARY=PASS')
+        PY
+        printf '[]\n' > "$WORK/canary-clean.json"
+        set +e
+        "$TOOL" dir "$WORK/canary/clean" \
+          --config "$GITHUB_ACTION_PATH/gitleaks.toml" \
+          --gitleaks-ignore-path "$GITHUB_ACTION_PATH/.gitleaksignore" \
+          --ignore-gitleaks-allow --redact=100 --no-banner --no-color \
+          --max-archive-depth=0 --max-decode-depth=0 --max-target-megabytes=10 \
+          --report-format json --report-path "$WORK/canary-clean.json" \
+          >"$WORK/canary-clean.stdout" 2>"$WORK/canary-clean.stderr"
+        clean_rc=$?
+        set -e
+        test "$clean_rc" = 0
+        rm -rf "$WORK/canary" "$WORK"/canary-*.json "$WORK"/canary-*.stdout "$WORK"/canary-*.stderr
+        echo 'P049_CLEAN_CANARY=PASS'
+        echo 'P049_RAW_CANARY_EVIDENCE_RETAINED=FALSE'
+
+    - name: Stage bounded working-tree scope and scan with fixed policy
+      id: scan
+      shell: bash
+      env:
+        ROOT: ${{ inputs.root }}
+        TOOL: ${{ steps.install.outputs.tool }}
+        WORK: ${{ steps.install.outputs.work }}
+        VERSION: ${{ steps.install.outputs.version }}
+      run: |
+        set -euo pipefail
+        staging="$WORK/staged"
+        preflight="$WORK/preflight.json"
+        raw="$WORK/raw-findings.json"
+        result="$WORK/p049-secret-exposure-result.json"
+        python3 "$GITHUB_ACTION_PATH/preflight.py" \
+          --workspace "$GITHUB_WORKSPACE" --root "$ROOT" --staging "$staging" --output "$preflight"
+        printf '[]\n' > "$raw"
+        set +e
+        "$TOOL" dir "$staging" \
+          --config "$GITHUB_ACTION_PATH/gitleaks.toml" \
+          --gitleaks-ignore-path "$GITHUB_ACTION_PATH/.gitleaksignore" \
+          --ignore-gitleaks-allow --redact=100 --no-banner --no-color \
+          --max-archive-depth=0 --max-decode-depth=0 --max-target-megabytes=10 \
+          --report-format json --report-path "$raw" \
+          >"$WORK/scan.stdout" 2>"$WORK/scan.stderr"
+        rc=$?
+        set -e
+        python3 "$GITHUB_ACTION_PATH/sanitize_report.py" \
+          --raw "$raw" --exit-code "$rc" --version "$VERSION" --preflight "$preflight" --output "$result"
+        rm -f "$raw" "$WORK/scan.stdout" "$WORK/scan.stderr"
+        rm -rf "$staging"
+        python3 - "$result" "$GITHUB_OUTPUT" <<'PY'
+        import hashlib, json, sys
+        from pathlib import Path
+        result_path=Path(sys.argv[1])
+        output_path=Path(sys.argv[2])
+        data=json.loads(result_path.read_text(encoding='utf-8'))
+        digest=hashlib.sha256(result_path.read_bytes()).hexdigest()
+        with output_path.open('a', encoding='utf-8') as out:
+            out.write(f"status={data['status']}\n")
+            out.write(f"finding-count={data['finding_count']}\n")
+            out.write(f"rule-count={data['rule_count']}\n")
+            out.write(f"file-count={data['scope']['file_count']}\n")
+            out.write(f"result-file={result_path}\n")
+            out.write(f"result-sha256={digest}\n")
+            out.write(f"gitleaks-version={data['upstream']['version']}\n")
+        print(f"P049_SANITIZED_RESULT_SHA256={digest}")
+        print('P049_RAW_FINDINGS_RETAINED=FALSE')
+        print('P049_RAW_STDOUT_STDERR_RETAINED=FALSE')
+        PY
+
+    - name: Fail closed on findings or scanner inconsistency
+      if: ${{ steps.scan.outputs.status != 'PASS' }}
+      shell: bash
+      env:
+        STATUS: ${{ steps.scan.outputs.status }}
+        FINDING_COUNT: ${{ steps.scan.outputs.finding-count }}
+      run: |
+        set -euo pipefail
+        if [ "$STATUS" = 'FINDINGS' ]; then
+          echo "::error::P-049 detected ${FINDING_COUNT} secret-like finding(s). Secret values, matching text and source paths were suppressed. Review locally with an authorized secret-response process."
+        else
+          echo '::error::P-049 scanner result was inconsistent or the scanner failed. Raw diagnostics were suppressed.'
+        fi
+        exit 1
