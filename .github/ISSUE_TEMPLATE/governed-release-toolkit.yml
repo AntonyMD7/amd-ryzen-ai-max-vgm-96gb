@@ -1,0 +1,92 @@
+name: Governed Release Toolkit issue
+description: Report a reproducible P-051/P-057 validation, planning, publication, recovery, documentation, or interoperability problem without exposing secrets.
+title: "[governed-release] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve the DAIS Governed Release Toolkit. **Do not paste GitHub tokens, credentials, private repository contents, internal hostnames, private URLs, or other sensitive data.** A release-operation failure is not a reason to disclose a secret.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Manifest validation
+        - Plan-only action
+        - Trusted publication action
+        - Draft/recovery state
+        - Exact tag verification
+        - Documentation / beginner experience
+        - Accessibility / language
+        - Interoperability / upstream integration
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: toolkit_version
+    attributes:
+      label: Toolkit version or exact commit
+      description: Use a public release tag or 40-character commit only; do not include a credential-bearing URL.
+      placeholder: v0.2.0
+    validations:
+      required: true
+
+  - type: input
+    id: runner
+    attributes:
+      label: Runner environment
+      description: Public/sanitized OS and runner type only.
+      placeholder: GitHub-hosted Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should the toolkit have done?
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include sanitized error text and exit/status information. Remove tokens, private URLs, user paths, private repository content and internal infrastructure details.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal sanitized reproduction
+      description: Provide the smallest public-safe workflow/manifest fragment that reproduces the issue. Never include secrets.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mutation_stage
+    attributes:
+      label: Furthest release lifecycle stage reached
+      options:
+        - PLAN_ONLY / no mutation
+        - Before draft creation
+        - Draft created but not published
+        - Published but exact-tag verification not established
+        - Published and exact-tag verification passed
+        - Unknown
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed credentials, tokens, private URLs, private repository content, personal data and internal infrastructure details from this report.
+          required: true
+        - label: I understand that a successful release operation does not by itself prove product correctness or DAIS roadmap completion.
+          required: true
