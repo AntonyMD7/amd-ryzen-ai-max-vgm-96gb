@@ -1,0 +1,61 @@
+name: P-050 Evidence Validation Action
+about: Report a P-050 validation, runtime, documentation, or interoperability issue using sanitized evidence only.
+title: "[P-050] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve P-050. Do **not** include credentials, tokens, private infrastructure details, PHI, personal data, or unsanitized evidence. A validation PASS is not proof of producer identity or semantic truth.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Schema validation
+        - Artifact hash validation
+        - GitHub Action runtime
+        - Outputs or annotations
+        - Signed-attestation interoperability
+        - Documentation or accessibility
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Released ref or exact commit
+      description: Prefer an immutable tag/commit such as v0.3.0 or its resolved SHA.
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - Linux x64 / CPython 3.12
+        - Other / unsupported runtime
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include only sanitized errors or a minimal synthetic fixture.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I removed credentials, tokens, personal/health data, private network details, private repository content, and sensitive evidence.
+          required: true
+        - label: I understand P-050 validates structure/hash equality and does not authenticate the producer or prove semantic truth.
+          required: true
