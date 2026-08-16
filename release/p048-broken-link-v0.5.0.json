@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "release_id": "DAIS-P048-BROKEN-LINK-V0.5.0",
+  "roadmap_ids": ["P-048"],
+  "tag": "v0.5.0",
+  "title": "DAIS Broken Link Scanner Action v0.5.0",
+  "source_commit": "1cc9cb51539e7e39e7141d994d9ad1709c71fece",
+  "notes_file": "docs/P048-RELEASE-NOTES-v0.5.0.md",
+  "required_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    ".github/actions/broken-link-scan/action.yml",
+    ".github/actions/broken-link-scan/preflight.py",
+    ".github/actions/broken-link-scan/sanitize_report.py",
+    ".github/workflows/p048-broken-link-action.yml",
+    ".github/ISSUE_TEMPLATE/p048-broken-link-scanner.yml",
+    "docs/P048-BROKEN-LINK-SCANNER-START-HERE.md",
+    "docs/P048-BROKEN-LINK-SCANNER-ACTION.md",
+    "docs/P048-RELEASE-NOTES-v0.5.0.md",
+    "tests/test_p048_broken_link_action.py"
+  ],
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "post_publish_exact_tag_verification_required": true,
+  "roadmap_completion_on_publish": false,
+  "make_latest": true
+}

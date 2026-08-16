@@ -1,0 +1,285 @@
+name: P-048 Broken Link Scanner v0.5.0 governed release
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p048-broken-link-v0.5.0-release.yml'
+      - 'release/p048-broken-link-v0.5.0.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/p048-broken-link-v0.5.0-release.yml'
+      - 'release/p048-broken-link-v0.5.0.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p048-broken-link-v0.5.0-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed release-control source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Require exact P-048 product source retained and ancestral
+        run: |
+          set -euo pipefail
+          source_commit="$(python -c "import json;print(json.load(open('release/p048-broken-link-v0.5.0.json'))['source_commit'])")"
+          git cat-file -e "${source_commit}^{commit}"
+          git merge-base --is-ancestor "$source_commit" "$GITHUB_SHA"
+          for p in \
+            '.github/actions/broken-link-scan/action.yml' \
+            '.github/actions/broken-link-scan/preflight.py' \
+            '.github/actions/broken-link-scan/sanitize_report.py' \
+            '.github/workflows/p048-broken-link-action.yml' \
+            '.github/ISSUE_TEMPLATE/p048-broken-link-scanner.yml' \
+            'docs/P048-BROKEN-LINK-SCANNER-START-HERE.md' \
+            'docs/P048-BROKEN-LINK-SCANNER-ACTION.md' \
+            'docs/P048-RELEASE-NOTES-v0.5.0.md' \
+            'tests/test_p048_broken_link_action.py'; do
+            git cat-file -e "${source_commit}:${p}"
+          done
+          echo 'P048_EXACT_PRODUCT_SOURCE_RETAINED=PASS'
+
+      - name: Re-run P-048 adversarial product contract tests
+        run: |
+          set -euo pipefail
+          python tests/test_p048_broken_link_action.py
+
+      - name: Exercise governed release plan only
+        id: plan
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/p048-broken-link-v0.5.0.json
+          publish: 'false'
+          evidence-file: p048-release-plan-evidence.json
+
+      - name: Assert release plan is non-mutating
+        env:
+          ACTION_STATUS: ${{ steps.plan.outputs.status }}
+        run: |
+          set -euo pipefail
+          test "$ACTION_STATUS" = READY_FOR_TRUSTED_PUSH
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('p048-release-plan-evidence.json').read_text())
+          assert d['mode']=='PLAN_ONLY'
+          assert d['published'] is False
+          assert d['draft_created'] is False
+          assert d['roadmap_completion_promoted'] is False
+          print('P048_RELEASE_PLAN=PASS')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+
+      - name: Retain sanitized release-plan evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p048-release-plan-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            p048-release-plan-evidence.json
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Publish exact P-048 source through governed release action
+        id: publish
+        uses: ./.github/actions/governed-release
+        with:
+          manifest: release/p048-broken-link-v0.5.0.json
+          publish: 'true'
+          allowed-ref: refs/heads/main
+          evidence-file: p048-publication-evidence.json
+
+      - name: Independently verify release and exact public tag target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(python -c "import json;print(json.load(open('release/p048-broken-link-v0.5.0.json'))['tag'])")"
+          source_commit="$(python -c "import json;print(json.load(open('release/p048-broken-link-v0.5.0.json'))['source_commit'])")"
+          title="$(python -c "import json;print(json.load(open('release/p048-broken-link-v0.5.0.json'))['title'])")"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName,name,url,publishedAt > p048-public-release.json
+          python - "$tag" "$source_commit" "$title" <<'PY'
+          import json, os, subprocess, sys
+          from pathlib import Path
+          tag, source, title=sys.argv[1:]
+          release=json.loads(Path('p048-public-release.json').read_text())
+          assert release['isDraft'] is False
+          assert release['tagName']==tag
+          assert release['name']==title
+          assert release['publishedAt']
+          remote=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}.git"
+          subprocess.run(['git','fetch','--force',remote,f'refs/tags/{tag}:refs/tags/{tag}'],check=True)
+          resolved=subprocess.check_output(['git','rev-list','-n','1',tag],text=True).strip()
+          assert resolved==source,(resolved,source)
+          out={
+            'schema_version':'1.0',
+            'evidence_type':'p048-governed-release-publication',
+            'roadmap_id':'P-048',
+            'tag':tag,
+            'intended_source_commit':source,
+            'resolved_tag_commit':resolved,
+            'release_url':release['url'],
+            'published_at':release['publishedAt'],
+            'exact_tag_target_verified':True,
+            'roadmap_completion_promoted':False,
+            'released_ref_acceptance_required':True,
+            'final_completion_audit_required':True
+          }
+          Path('p048-independent-release-verification.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print('P048_GOVERNED_RELEASE=PASS')
+          print('P048_EXACT_PUBLIC_TAG=PASS')
+          print('ROADMAP_COMPLETION_PROMOTED=FALSE')
+          PY
+
+      - name: Retain publication evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p048-publication-${{ github.run_id }}
+          path: |
+            governed-release-manifest-validation.json
+            p048-publication-evidence.json
+            p048-public-release.json
+            p048-independent-release-verification.json
+          retention-days: 30
+          if-no-files-found: error
+
+  released-consumer-acceptance:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout public learning-git consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/learning-git
+          ref: main
+          path: consumer-learning-git
+          persist-credentials: false
+
+      - name: Record exact positive-consumer source
+        id: learning_source
+        run: |
+          set -euo pipefail
+          commit="$(git -C consumer-learning-git rev-parse HEAD)"
+          sha256sum consumer-learning-git/README.md > /tmp/p048-learning-before.sha256
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "P048_LEARNING_GIT_SOURCE=$commit"
+
+      - name: Consume released P-048 ref against real public repository
+        id: learning
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/broken-link-scan@v0.5.0
+        with:
+          root: consumer-learning-git
+
+      - name: Require positive released-ref consumer acceptance
+        env:
+          STATUS: ${{ steps.learning.outputs.status }}
+          DOCUMENT_COUNT: ${{ steps.learning.outputs.document-count }}
+          URL_COUNT: ${{ steps.learning.outputs.absolute-url-count }}
+          RESULT_FILE: ${{ steps.learning.outputs.result-file }}
+          RESULT_SHA256: ${{ steps.learning.outputs.result-sha256 }}
+          CONSUMER_COMMIT: ${{ steps.learning_source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          test "$STATUS" = PASS
+          test "$DOCUMENT_COUNT" -ge 1
+          test "$URL_COUNT" -ge 1
+          sha256sum --check /tmp/p048-learning-before.sha256
+          test "$(sha256sum "$RESULT_FILE" | awk '{print $1}')" = "$RESULT_SHA256"
+          cp "$RESULT_FILE" p048-released-learning-git-result.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data={
+            'schema_version':'1.0',
+            'roadmap_id':'P-048',
+            'acceptance_type':'REAL_PUBLIC_REPOSITORY_RELEASED_REF',
+            'released_ref':'v0.5.0',
+            'consumer_repository':'AntonyMD7/learning-git',
+            'consumer_commit':os.environ['CONSUMER_COMMIT'],
+            'result':'PASS',
+            'input_mutation_performed':False,
+            'private_network_access_allowed':False,
+            'roadmap_completion_promoted':False,
+          }
+          Path('p048-released-consumer-evidence.json').write_text(json.dumps(data,indent=2,sort_keys=True)+'\n')
+          print('P048_RELEASED_REAL_PUBLIC_CONSUMER=PASS')
+          PY
+
+      - name: Checkout real public Kimi-Haul safety-negative consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/Kimi-Haul
+          ref: main
+          path: consumer-kimi-haul
+          persist-credentials: false
+
+      - name: Require released ref to refuse Kimi-Haul localhost documentation target
+        id: kimi
+        continue-on-error: true
+        uses: AntonyMD7/amd-ryzen-ai-max-vgm-96gb/.github/actions/broken-link-scan@v0.5.0
+        with:
+          root: consumer-kimi-haul
+
+      - name: Assert real public safety-negative control
+        env:
+          KIMI_OUTCOME: ${{ steps.kimi.outcome }}
+        run: |
+          set -euo pipefail
+          test "$KIMI_OUTCOME" = failure
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('p048-released-consumer-evidence.json')
+          data=json.loads(p.read_text())
+          data['real_public_safety_negative']={
+            'consumer_repository':'AntonyMD7/Kimi-Haul',
+            'expected_reason_class':'EXPLICIT_LOCALHOST_TARGET_REFUSED_BEFORE_NETWORK',
+            'action_outcome':os.environ['KIMI_OUTCOME'],
+            'private_target_request_required':False,
+          }
+          p.write_text(json.dumps(data,indent=2,sort_keys=True)+'\n')
+          print('P048_REAL_PUBLIC_SAFETY_NEGATIVE=PASS')
+          PY
+
+      - name: Retain released-ref public-consumer evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p048-released-ref-consumer-${{ github.run_id }}
+          path: |
+            p048-released-learning-git-result.json
+            p048-released-consumer-evidence.json
+          retention-days: 30
+          if-no-files-found: error
