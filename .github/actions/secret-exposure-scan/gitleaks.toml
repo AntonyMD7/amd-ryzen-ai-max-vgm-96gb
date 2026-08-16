@@ -1,0 +1,4 @@
+title = "DAIS P-049 fixed Gitleaks policy"
+
+[extend]
+useDefault = true
