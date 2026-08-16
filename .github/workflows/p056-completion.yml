@@ -140,13 +140,16 @@ jobs:
           language: es
           source-revision: 01723a1825113de08810193f37e8047d978433c2
 
-      - name: Require fresh released-ref acceptance and final attestation
+      - name: Require provenance-scoped determinism, fresh released-ref acceptance and final attestation
         env:
           STATUS_EN: ${{ steps.en.outputs.status }}
           STATUS_ES: ${{ steps.es.outputs.status }}
           DIGEST_EN: ${{ steps.en.outputs.report-sha256 }}
           DIGEST_EN2: ${{ steps.en2.outputs.report-sha256 }}
           DIGEST_ES: ${{ steps.es.outputs.report-sha256 }}
+          DEP_EN: ${{ steps.en.outputs.dependency-environment-sha256 }}
+          DEP_EN2: ${{ steps.en2.outputs.dependency-environment-sha256 }}
+          DEP_ES: ${{ steps.es.outputs.dependency-environment-sha256 }}
           RAW_EN: ${{ steps.en.outputs.raw-report-sha256 }}
           RAW_EN2: ${{ steps.en2.outputs.raw-report-sha256 }}
           RAW_ES: ${{ steps.es.outputs.raw-report-sha256 }}
@@ -158,9 +161,12 @@ jobs:
           set -euo pipefail
           test "$STATUS_EN" = 'REUSE_NONCOMPLIANT'
           test "$STATUS_EN" = "$STATUS_ES"
+          test "$DEP_EN" = "$DEP_EN2"
+          test "$DEP_EN" = "$DEP_ES"
+          [[ "$DEP_EN" =~ ^[0-9a-f]{64}$ ]]
           test "$DIGEST_EN" = "$DIGEST_EN2"
           test "$DIGEST_EN" = "$DIGEST_ES"
-          test "$DIGEST_EN" = '9b1a820a49ff77f18b514d8ce424849e18454584e210d47081b41ac8ed72a593'
+          [[ "$DIGEST_EN" =~ ^[0-9a-f]{64}$ ]]
           [[ "$RAW_EN" =~ ^[0-9a-f]{64}$ ]] && [[ "$RAW_EN2" =~ ^[0-9a-f]{64}$ ]] && [[ "$RAW_ES" =~ ^[0-9a-f]{64}$ ]]
           sha256sum --check /tmp/p056-final-learning-before.sha256
           test "$(git -C consumer-learning-git status --porcelain)" = ''
@@ -171,6 +177,7 @@ jobs:
           assert en==es
           assert en['roadmap_id']=='P-056' and en['product']['version']=='0.11.1'
           assert en['authority']['evidence_identity_profile']=='semantic-v1'
+          assert en['authority']['dependency_environment_sha256']==os.environ['DEP_EN']
           assert en['source']['raw_reuse_report_sha256_in_deterministic_record'] is False
           assert 'raw_reuse_report_sha256' not in en['source']
           assert en['execution']['repository_mutation_performed'] is False
@@ -182,15 +189,25 @@ jobs:
           assert 'README.md' not in json.dumps(en)
           record=json.loads(Path('examples/public-build-completion-p056-v0.11.1.json').read_text())
           assert record['status']=='COMPLETE'
+          historical_dependency_environment_sha256='c8b712f7d6904b2e42a45dcd0b59dde7ffe1d2a2c4cd5f8550c58e2c7e7638bd'
+          historical_semantic_report_sha256='9b1a820a49ff77f18b514d8ce424849e18454584e210d47081b41ac8ed72a593'
           attestation={
-            'schema_version':'1.0','evidence_type':'p056-final-completion-audit','roadmap_id':'P-056',
+            'schema_version':'1.1','evidence_type':'p056-final-completion-audit','roadmap_id':'P-056',
             'release':'v0.11.1','released_source_commit':'a7b6dfa494e3fac6d7d20cab651b47f686e92495',
             'release_control_commit':'2ea56caa77c35d233aaa516ad9c86206ce578651',
             'consumer_repository':'AntonyMD7/learning-git','consumer_commit':'01723a1825113de08810193f37e8047d978433c2',
-            'status':os.environ['STATUS_EN'],'semantic_report_sha256':os.environ['DIGEST_EN'],
-            'repeat_semantic_report_sha256':os.environ['DIGEST_EN2'],'spanish_semantic_report_sha256':os.environ['DIGEST_ES'],
+            'status':os.environ['STATUS_EN'],'fresh_dependency_environment_sha256':os.environ['DEP_EN'],
+            'semantic_report_sha256':os.environ['DIGEST_EN'],'repeat_semantic_report_sha256':os.environ['DIGEST_EN2'],
+            'spanish_semantic_report_sha256':os.environ['DIGEST_ES'],
             'raw_run_sha256_values':[os.environ['RAW_EN'],os.environ['RAW_EN2'],os.environ['RAW_ES']],
-            'semantic_determinism':'PASS','multilingual_truth_state':'PASS','input_mutation_performed':False,
+            'historical_release_acceptance':{
+              'dependency_environment_sha256':historical_dependency_environment_sha256,
+              'semantic_report_sha256':historical_semantic_report_sha256
+            },
+            'semantic_determinism_under_same_declared_provenance':'PASS',
+            'cross_dependency_environment_digest_equality_claimed':False,
+            'fully_hash_locked_transitive_dependency_closure_claimed':False,
+            'multilingual_truth_state':'PASS','input_mutation_performed':False,
             'repository_mutation_performed':False,'product_network_request_performed':False,
             'legal_permission_claimed':False,'license_compatibility_claimed':False,
             'canonical_gate_count':19,'all_gates_pass':True,'flagship_completion_claimed':False,
@@ -198,7 +215,7 @@ jobs:
           }
           Path('p056-final-completion-attestation.json').write_text(json.dumps(attestation,indent=2,sort_keys=True)+'\n')
           print('P056_FINAL_REAL_PUBLIC_CONSUMER=PASS')
-          print('P056_FINAL_SEMANTIC_DETERMINISM=PASS')
+          print('P056_FINAL_PROVENANCE_SCOPED_DETERMINISM=PASS')
           print('P056_FINAL_MULTILINGUAL_TRUTH=PASS')
           print('P056_FINAL_INPUT_MUTATION=NO')
           PY
