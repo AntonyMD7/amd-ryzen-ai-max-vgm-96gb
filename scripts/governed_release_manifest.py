@@ -42,7 +42,9 @@ def safe_relpath(value: Any, *, field: str) -> str:
     if not isinstance(value, str) or not value or not SAFE_PATH.fullmatch(value):
         raise ManifestError(f"{field} must be a safe repository-relative path")
     parts = value.split("/")
-    if value.startswith(".") or any(part in {"", ".", ".."} for part in parts):
+    # Dot-prefixed repository entries such as .github and .changeset are valid.
+    # Only actual traversal/current-directory segments are forbidden.
+    if any(part in {"", ".", ".."} for part in parts):
         raise ManifestError(f"{field} contains forbidden traversal or dot segments")
     return value
 
