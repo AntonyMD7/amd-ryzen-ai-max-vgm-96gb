@@ -21,9 +21,9 @@ The product remains a read-only local contributor-onboarding audit and EN/ES gui
 
 This patch release is governed against exact source commit:
 
-`f29718378c2aae001c1ec4161db898b823676e95`
+`082b41527f016058ff8c199b43beaca3e716c390`
 
-That commit contains the language-isolation fix and passing source-level regression acceptance. The public tag must resolve exactly to this commit.
+That canonical-main commit contains the language-isolation fix, passing source-level regression acceptance, and these patch release notes. The public tag must resolve exactly to this commit.
 
 ## Completion boundary
 
