@@ -94,7 +94,8 @@ runs:
         from pathlib import Path
         import sys
         # Construct at runtime so the repository itself never stores a complete token-like fixture.
-        token = 'ghp_' + 'aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789'
+        # Deliberately non-sequential to avoid Gitleaks' placeholder-stopword allowlist.
+        token = 'ghp_' + 'wA9mK2pLxN4vRtQzY6bC8dEfGhJlM0oPq1rS'
         Path(sys.argv[1]).write_text('runtime_canary=' + token + '\n', encoding='utf-8')
         PY
         printf 'ordinary public documentation\n' > "$WORK/canary/clean/clean.txt"
