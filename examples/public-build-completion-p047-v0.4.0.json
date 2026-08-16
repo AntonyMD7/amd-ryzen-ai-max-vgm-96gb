@@ -1,0 +1,142 @@
+{
+  "schema_version": "0.1",
+  "subject_id": "P-047",
+  "status": "COMPLETE",
+  "gates": {
+    "problem_and_intended_users_defined": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-START-HERE.md", "docs/P047-README-LINT-ACTION.md"],
+      "rationale": "The product defines the maintainer/beginner problem narrowly: safe, reproducible README Markdown style/structure checking without inventing another parser or silently editing documentation.",
+      "applicability_reviewed": true
+    },
+    "public_repository_or_distribution_surface_exists": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb", "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/releases/tag/v0.4.0"],
+      "rationale": "P-047 is distributed publicly as a reusable GitHub composite Action and a non-draft v0.4.0 release.",
+      "applicability_reviewed": true
+    },
+    "explicit_open_source_license": {
+      "state": "PASS",
+      "evidence": ["LICENSE"],
+      "rationale": "The public proving-ground repository contains the MIT License covering the P-047 source.",
+      "applicability_reviewed": true
+    },
+    "complete_readme": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-START-HERE.md", "docs/P047-README-LINT-ACTION.md"],
+      "rationale": "The product-scoped public documentation covers purpose, usage, output semantics, architecture, security/privacy, recovery, accessibility, localization path, support and limitations.",
+      "applicability_reviewed": true
+    },
+    "beginner_start_here_path": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-START-HERE.md"],
+      "rationale": "A dedicated beginner path provides minimal least-privilege usage, PASS/FAIL interpretation, safety/privacy guidance, recovery and support.",
+      "applicability_reviewed": true
+    },
+    "engineering_or_architecture_documentation": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-ACTION.md", ".github/actions/readme-lint/action.yml", ".github/actions/readme-lint/preflight.py"],
+      "rationale": "Architecture, upstream adoption, fixed profile, path/resource bounds, extension-point threat boundary, mutation policy, outputs, test strategy and limitations are explicit.",
+      "applicability_reviewed": true
+    },
+    "reproducible_installation_or_use_instructions": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-START-HERE.md", ".github/actions/readme-lint/action.yml", "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/releases/tag/v0.4.0"],
+      "rationale": "Consumers can invoke the released @v0.4.0 Action directly; its upstream markdownlint-cli2 Action is pinned to immutable commit 21c1be1b93ad9ed58fa840aacc3f279cde2a72ff and its fixed configuration ships with the Action.",
+      "applicability_reviewed": true
+    },
+    "safety_scope_and_limitations": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-ACTION.md", "docs/P047-README-LINT-START-HERE.md", "RELEASE-NOTES-v0.4.0.md", "docs/P047-COMPLETION-RECORD-v0.4.0.md"],
+      "rationale": "The product explicitly limits PASS to fixed-profile README Markdown style/structure and excludes correctness, completeness, link health, accessibility conformance, security hygiene and DLP claims.",
+      "applicability_reviewed": true
+    },
+    "recovery_or_rollback_guidance_for_mutating_tools": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-START-HERE.md", "docs/P047-README-LINT-ACTION.md", "docs/P047-COMPLETION-RECORD-v0.4.0.md"],
+      "rationale": "P-047 is non-mutating because auto-fix is hard-disabled. Recovery requires discarding incomplete evidence and rerunning unchanged source; Action rollback is a workflow pin/revert, not a content mutation.",
+      "applicability_reviewed": true
+    },
+    "tests_and_ci": {
+      "state": "PASS",
+      "evidence": ["tests/test_p047_readme_lint_contract.py", ".github/workflows/p047-readme-lint-action.yml", ".github/workflows/p047-readme-lint-v0.4.0-release.yml", ".github/workflows/p047-released-ref-consumer-acceptance.yml", "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/actions/runs/31930292226", "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/actions/runs/31930402427"],
+      "rationale": "Contract and hosted acceptance cover positive linting, actual lint failure, no README, traversal, symlink/resource boundaries, immutable upstream pin, no plugin surface, no auto-fix, byte immutability, governed release and two released-ref real-public-consumer executions.",
+      "applicability_reviewed": true
+    },
+    "security_and_privacy_review": {
+      "state": "PASS",
+      "evidence": ["SECURITY.md", "docs/P047-README-LINT-ACTION.md", ".github/ISSUE_TEMPLATE/p047-readme-lint.yml", "docs/P047-COMPLETION-RECORD-v0.4.0.md"],
+      "rationale": "The review covers fixed no-plugin configuration, traversal/symlink/resource refusal, least privilege, no auto-fix, README-content visibility, privacy-safe support intake and non-DLP truth boundaries.",
+      "applicability_reviewed": true
+    },
+    "accessibility_review": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-START-HERE.md", "docs/P047-README-LINT-ACTION.md", "docs/P047-COMPLETION-RECORD-v0.4.0.md"],
+      "rationale": "The non-graphical developer Action exposes textual PASS/FAIL, counts and stable rule identifiers without color/pointer dependence. This is an applicability review, not WCAG conformance or human assistive-technology acceptance.",
+      "applicability_reviewed": true
+    },
+    "multilingual_path_considered": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-START-HERE.md", "docs/P047-README-LINT-ACTION.md", "docs/P047-COMPLETION-RECORD-v0.4.0.md"],
+      "rationale": "Stable machine outputs/rule identifiers are language-neutral integration keys and explanatory documentation can be localized independently; v0.4.0 human documentation is English-first and multilingual acceptance is not claimed.",
+      "applicability_reviewed": true
+    },
+    "real_world_acceptance_test": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/actions/runs/31930402427", "GitHub job 95124180487 — released-ref consumer AntonyMD7/learning-git at 01723a1825113de08810193f37e8047d978433c2", "GitHub job 95124180487 — released-ref consumer AntonyMD7/Kimi-Haul at 5905f5be3f812b801ab5f7ec5b33c65c166131fc", "docs/P047-COMPLETION-RECORD-v0.4.0.md"],
+      "rationale": "The public @v0.4.0 Action ran successfully against README scopes in two separate real public repositories; result semantics matched workflow outcomes and both consumer README inputs remained byte-for-byte unchanged.",
+      "applicability_reviewed": true
+    },
+    "evidence_retained": {
+      "state": "PASS",
+      "evidence": ["GitHub Actions artifact 9259065772 sha256 b7f979f53204932a4d82020c3c4bdf030396f3f73af7177e92c3f992d2c5b18f", "GitHub Actions artifact 9259068031 sha256 4c1ab7b62595bd2dd2c9b4f2a07af6535070096da5b4c42f278f341cb3db7491", "GitHub Actions artifact 9259091393 sha256 91f424baff55c0b38553592a4743f8acc2a23d50508417210293770e10118a35", "docs/P047-COMPLETION-RECORD-v0.4.0.md"],
+      "rationale": "Release-plan, publication and released-ref real-consumer evidence are retained with exact artifact IDs/digests, and permanent release/completion documentation records their interpretation and limits.",
+      "applicability_reviewed": true
+    },
+    "version_tag_or_release_published": {
+      "state": "PASS",
+      "evidence": ["https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/releases/tag/v0.4.0", "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/actions/runs/31930292226", "docs/P047-COMPLETION-RECORD-v0.4.0.md"],
+      "rationale": "Public non-draft v0.4.0 was published on 2026-08-16 and independent release verification resolved its public tag to exact product source e8ec4a6f5dfbaadfaca46c98ad3679dce8e1ddd7.",
+      "applicability_reviewed": true
+    },
+    "known_limitations_documented": {
+      "state": "PASS",
+      "evidence": ["docs/P047-README-LINT-ACTION.md", "docs/P047-README-LINT-START-HERE.md", "RELEASE-NOTES-v0.4.0.md", "docs/P047-COMPLETION-RECORD-v0.4.0.md"],
+      "rationale": "Linux/GitHub Actions runtime scope, fixed-profile README-only semantics, no auto-fix/plugin surface, English-first docs and all correctness/accessibility/link/security/DLP non-claims are explicit.",
+      "applicability_reviewed": true
+    },
+    "contribution_and_issue_paths": {
+      "state": "PASS",
+      "evidence": ["CONTRIBUTING.md", ".github/ISSUE_TEMPLATE/p047-readme-lint.yml"],
+      "rationale": "General contribution guidance and a dedicated privacy-safe P-047 support/reproduction path exist.",
+      "applicability_reviewed": true
+    },
+    "canonical_handover_or_build_record_updated": {
+      "state": "PASS",
+      "evidence": ["docs/P047-COMPLETION-RECORD-v0.4.0.md", "docs/DAIS-PUBLIC-BUILD-STATUS.md"],
+      "rationale": "The final completion tranche binds product architecture, upstream identity, governed release, exact public tag source, two released-ref public consumers, retained evidence, limitations and portfolio-state promotion in one auditable record.",
+      "applicability_reviewed": true
+    }
+  },
+  "completion_record": {
+    "project": "README Linting Action",
+    "roadmap_id": "P-047",
+    "repository": "AntonyMD7/amd-ryzen-ai-max-vgm-96gb",
+    "public_url": "https://github.com/AntonyMD7/amd-ryzen-ai-max-vgm-96gb/releases/tag/v0.4.0",
+    "version": "0.4.0",
+    "release_or_tag": "v0.4.0",
+    "completion_date": "2026-08-16",
+    "license": "MIT",
+    "ci_status": "PASS — product/release acceptance plus released-ref public-consumer run 31930402427; final completion-tranche CI required before merge",
+    "security_review": "PASS WITH DECLARED SCOPE — fixed no-plugin profile, bounded path/resource preflight, no auto-fix, least privilege, privacy-safe support; not a DLP/security scanner",
+    "accessibility_review": "PASS WITH LIMITATIONS — non-graphical text/machine-output interface reviewed for explicit operation; no WCAG or human assistive-technology conformance claim",
+    "beginner_path_verified": "docs/P047-README-LINT-START-HERE.md",
+    "engineer_path_verified": "docs/P047-README-LINT-ACTION.md + released Action/preflight/tests/workflows",
+    "multilingual_status": "PATH CONSIDERED — stable machine/rule identifiers; English-first human documentation",
+    "real_world_test": "PASS — public @v0.4.0 Action consumed against learning-git and Kimi-Haul exact public commits without README mutation; exact release source e8ec4a6f5dfbaadfaca46c98ad3679dce8e1ddd7",
+    "evidence_location": "GitHub release run 31930292226; artifacts 9259065772 and 9259068031; released-ref consumer run 31930402427; artifact 9259091393; public release/tag v0.4.0; docs/P047-COMPLETION-RECORD-v0.4.0.md",
+    "known_limitations": "GitHub Actions Linux context; fixed README Markdown style/structure profile only; no auto-fix/custom plugins; no documentation correctness, link health, accessibility conformance, security/DLP, GHES/local-act/Windows/macOS-runner or multilingual-user-acceptance claim",
+    "handover": "docs/P047-COMPLETION-RECORD-v0.4.0.md",
+    "final_status": "COMPLETE"
+  }
+}
