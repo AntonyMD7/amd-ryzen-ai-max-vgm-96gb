@@ -1,0 +1,222 @@
+name: P-056 License Compliance Checker acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/p056_license_compliance.py'
+      - 'tests/test_p056_license_compliance.py'
+      - '.github/actions/license-compliance/action.yml'
+      - '.github/workflows/p056-license-compliance-action.yml'
+      - 'docs/P056-LICENSE-COMPLIANCE.md'
+      - 'docs/P056-LICENSE-COMPLIANCE-START-HERE.md'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/p056_license_compliance.py'
+      - 'tests/test_p056_license_compliance.py'
+      - '.github/actions/license-compliance/action.yml'
+      - '.github/workflows/p056-license-compliance-action.yml'
+      - 'docs/P056-LICENSE-COMPLIANCE.md'
+      - 'docs/P056-LICENSE-COMPLIANCE-START-HERE.md'
+
+permissions:
+  contents: read
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Run adversarial P-056 tests
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input 'pytest>=8,<9'
+          python -m pytest -q tests/test_p056_license_compliance.py
+
+  real-reuse-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout product candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Build compliant and noncompliant disposable fixtures
+        run: |
+          set -euo pipefail
+          good="$RUNNER_TEMP/p056-good"
+          bad="$RUNNER_TEMP/p056-bad"
+          rm -rf "$good" "$bad"
+          mkdir -p "$good/LICENSES" "$bad"
+          cp LICENSE "$good/LICENSES/MIT.txt"
+          cat > "$good/hello.py" <<'PY'
+          # SPDX-FileCopyrightText: 2026 DAIS P-056 synthetic fixture
+          # SPDX-License-Identifier: MIT
+          print("hello")
+          PY
+          cat > "$bad/hello.py" <<'PY'
+          print("intentionally missing REUSE metadata")
+          PY
+
+      - name: Exercise exact upstream REUSE on compliant fixture
+        id: good
+        uses: ./.github/actions/license-compliance
+        with:
+          root: ${{ runner.temp }}/p056-good
+          language: en
+          source-revision: unknown
+
+      - name: Exercise exact upstream REUSE on noncompliant fixture
+        id: bad
+        uses: ./.github/actions/license-compliance
+        with:
+          root: ${{ runner.temp }}/p056-bad
+          language: es
+          source-revision: unknown
+
+      - name: Verify fixture truth, privacy boundary and provenance
+        env:
+          GOOD_STATUS: ${{ steps.good.outputs.status }}
+          GOOD_COMPLIANT: ${{ steps.good.outputs.compliant }}
+          GOOD_TOOL: ${{ steps.good.outputs.reuse-tool-version }}
+          GOOD_SPEC: ${{ steps.good.outputs.reuse-spec-version }}
+          GOOD_REPORT: ${{ steps.good.outputs.report-path }}
+          GOOD_RAW: ${{ steps.good.outputs.raw-report-path }}
+          GOOD_DEP_SHA: ${{ steps.good.outputs.dependency-environment-sha256 }}
+          BAD_STATUS: ${{ steps.bad.outputs.status }}
+          BAD_COMPLIANT: ${{ steps.bad.outputs.compliant }}
+          BAD_REPORT: ${{ steps.bad.outputs.report-path }}
+          BAD_RAW: ${{ steps.bad.outputs.raw-report-path }}
+        run: |
+          set -euo pipefail
+          test "$GOOD_STATUS" = 'REUSE_COMPLIANT'
+          test "$GOOD_COMPLIANT" = 'true'
+          test "$BAD_STATUS" = 'REUSE_NONCOMPLIANT'
+          test "$BAD_COMPLIANT" = 'false'
+          test "$GOOD_TOOL" = '6.2.0'
+          test "$GOOD_SPEC" = '3.3'
+          test "${#GOOD_DEP_SHA}" -eq 64
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          good=json.loads(Path(os.environ['GOOD_REPORT']).read_text())
+          bad=json.loads(Path(os.environ['BAD_REPORT']).read_text())
+          assert good['status']=='REUSE_COMPLIANT' and good['summary']['compliant'] is True
+          assert bad['status']=='REUSE_NONCOMPLIANT' and bad['summary']['compliant'] is False
+          assert good['authority']['tool_version']=='6.2.0'
+          assert good['authority']['reuse_spec_version']=='3.3'
+          assert good['authority']['dependency_environment_sha256']==os.environ['GOOD_DEP_SHA']
+          for r in (good,bad):
+              assert r['execution']['repository_mutation_performed'] is False
+              assert r['execution']['audit_network_request_performed'] is False
+              assert r['claims']['legal_permission_established'] is False
+              assert r['claims']['license_compatibility_established'] is False
+              assert r['claims']['distribution_legally_approved'] is False
+              encoded=json.dumps(r)
+              assert 'hello.py' not in encoded
+          assert 'hello.py' in Path(os.environ['BAD_RAW']).read_text()
+          print('P056_REAL_REUSE_COMPLIANT_FIXTURE=PASS')
+          print('P056_REAL_REUSE_NONCOMPLIANT_FIXTURE=PASS')
+          print('P056_SANITIZED_EVIDENCE=PASS')
+          PY
+
+      - name: Checkout pinned real public consumer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: AntonyMD7/learning-git
+          ref: 01723a1825113de08810193f37e8047d978433c2
+          path: consumer-learning-git
+          persist-credentials: false
+
+      - name: Record public consumer immutability baseline
+        run: |
+          set -euo pipefail
+          test "$(git -C consumer-learning-git rev-parse HEAD)" = '01723a1825113de08810193f37e8047d978433c2'
+          test "$(git -C consumer-learning-git status --porcelain)" = ''
+          sha256sum consumer-learning-git/README.md > /tmp/p056-learning-before.sha256
+
+      - name: Run P-056 against pinned real public repository
+        id: public
+        uses: ./.github/actions/license-compliance
+        with:
+          root: consumer-learning-git
+          language: en
+          source-revision: 01723a1825113de08810193f37e8047d978433c2
+
+      - name: Verify real-public truth and zero consumer mutation
+        env:
+          PUBLIC_STATUS: ${{ steps.public.outputs.status }}
+          PUBLIC_COMPLIANT: ${{ steps.public.outputs.compliant }}
+          PUBLIC_TOOL: ${{ steps.public.outputs.reuse-tool-version }}
+          PUBLIC_SPEC: ${{ steps.public.outputs.reuse-spec-version }}
+          PUBLIC_REPORT_SHA: ${{ steps.public.outputs.report-sha256 }}
+          PUBLIC_REPORT: ${{ steps.public.outputs.report-path }}
+          PUBLIC_GUIDE: ${{ steps.public.outputs.guide-path }}
+          PUBLIC_RAW: ${{ steps.public.outputs.raw-report-path }}
+        run: |
+          set -euo pipefail
+          test "$PUBLIC_STATUS" = 'REUSE_NONCOMPLIANT'
+          test "$PUBLIC_COMPLIANT" = 'false'
+          test "$PUBLIC_TOOL" = '6.2.0'
+          test "$PUBLIC_SPEC" = '3.3'
+          test "${#PUBLIC_REPORT_SHA}" -eq 64
+          sha256sum --check /tmp/p056-learning-before.sha256
+          test "$(git -C consumer-learning-git status --porcelain)" = ''
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          r=json.loads(Path(os.environ['PUBLIC_REPORT']).read_text())
+          assert r['roadmap_id']=='P-056'
+          assert r['product']['version']=='0.11.0'
+          assert r['source']['revision']=='01723a1825113de08810193f37e8047d978433c2'
+          assert r['status']=='REUSE_NONCOMPLIANT'
+          assert r['summary']['compliant'] is False
+          assert r['execution']['repository_mutation_performed'] is False
+          assert r['claims']['legal_permission_established'] is False
+          assert r['claims']['dependency_license_safety_established'] is False
+          sanitized=json.dumps(r)
+          raw=Path(os.environ['PUBLIC_RAW']).read_text()
+          assert 'README.md' not in sanitized
+          assert 'README.md' in raw
+          evidence={
+            'schema_version':'1.0',
+            'evidence_type':'p056-source-product-acceptance',
+            'roadmap_id':'P-056',
+            'product_version':'0.11.0',
+            'consumer_repository':'AntonyMD7/learning-git',
+            'consumer_commit':'01723a1825113de08810193f37e8047d978433c2',
+            'status':r['status'],
+            'reuse_tool_version':r['authority']['tool_version'],
+            'reuse_spec_version':r['authority']['reuse_spec_version'],
+            'sanitized_report_sha256':os.environ['PUBLIC_REPORT_SHA'],
+            'consumer_input_mutation_performed':False,
+            'legal_permission_claimed':False,
+            'license_compatibility_claimed':False,
+            'roadmap_completion_claimed':False,
+          }
+          Path('p056-source-acceptance.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n')
+          print('P056_REAL_PUBLIC_CONSUMER=PASS')
+          print('P056_INPUT_MUTATION=NO')
+          print('P056_LEGAL_OVERCLAIM=NO')
+          PY
+          mkdir -p p056-sanitized-evidence
+          cp "$PUBLIC_REPORT" p056-sanitized-evidence/public-consumer-report.json
+          cp "$PUBLIC_GUIDE" p056-sanitized-evidence/public-consumer-guide.md
+          cp p056-source-acceptance.json p056-sanitized-evidence/
+
+      - name: Retain sanitized source acceptance only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p056-source-acceptance-${{ github.run_id }}
+          path: p056-sanitized-evidence/
+          retention-days: 14
+          if-no-files-found: error
