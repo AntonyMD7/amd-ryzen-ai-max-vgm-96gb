@@ -42,24 +42,30 @@ def safe_root(raw: str, workspace: Path) -> Path:
     p = PurePosixPath(raw.replace("\\", "/"))
     if p.is_absolute() or any(part in {"", ".."} for part in p.parts):
         raise Refusal("root must stay within the checked-out repository")
-    root = (workspace / Path(*p.parts)).resolve(strict=True)
+    candidate = workspace / Path(*p.parts)
+    if candidate.is_symlink():
+        raise Refusal("root must not be a symlink")
+    root = candidate.resolve(strict=True)
     try:
         root.relative_to(workspace)
     except ValueError as exc:
         raise Refusal("root resolves outside GITHUB_WORKSPACE") from exc
-    if root.is_symlink() or not root.is_dir():
-        raise Refusal("root must be an existing non-symlink directory")
+    if not root.is_dir():
+        raise Refusal("root must be an existing directory")
     return root
 
 
 def inspect_url(raw: str) -> None:
-    parsed = urlsplit(raw)
-    scheme = parsed.scheme.lower()
-    if scheme not in {"http", "https"}:
-        raise Refusal(f"unsupported absolute URL scheme: {scheme}")
-    if parsed.username is not None or parsed.password is not None:
-        raise Refusal("URLs containing embedded credentials are forbidden")
-    host = (parsed.hostname or "").rstrip(".").lower()
+    try:
+        parsed = urlsplit(raw)
+        scheme = parsed.scheme.lower()
+        if scheme not in {"http", "https"}:
+            raise Refusal(f"unsupported absolute URL scheme: {scheme}")
+        if parsed.username is not None or parsed.password is not None:
+            raise Refusal("URLs containing embedded credentials are forbidden")
+        host = (parsed.hostname or "").rstrip(".").lower()
+    except ValueError as exc:
+        raise Refusal("malformed URL is forbidden") from exc
     if not host:
         raise Refusal("HTTP(S) URL is missing a hostname")
     if host in PRIVATE_NAMES or any(host.endswith(sfx) for sfx in PRIVATE_SUFFIXES):
@@ -92,6 +98,11 @@ def discover(root: Path, workspace: Path) -> tuple[list[Path], int]:
                 continue
             if "\n" in name or "\r" in name or candidate.is_symlink() or not candidate.is_file():
                 raise Refusal("unsupported/symlinked document path encountered")
+            resolved = candidate.resolve(strict=True)
+            try:
+                resolved.relative_to(workspace)
+            except ValueError as exc:
+                raise Refusal("document resolves outside GITHUB_WORKSPACE") from exc
             size = candidate.stat().st_size
             if size > MAX_FILE_BYTES:
                 raise Refusal(f"document exceeds {MAX_FILE_BYTES} byte bound")
