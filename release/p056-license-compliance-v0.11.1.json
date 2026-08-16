@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "release_id": "DAIS-P056-LICENSE-COMPLIANCE-V0.11.1",
+  "roadmap_ids": ["P-056"],
+  "tag": "v0.11.1",
+  "title": "DAIS License Compliance Checker v0.11.1",
+  "source_commit": "a7b6dfa494e3fac6d7d20cab651b47f686e92495",
+  "notes_file": "docs/P056-RELEASE-NOTES-v0.11.1.md",
+  "required_files": [
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    ".github/actions/license-compliance/action.yml",
+    "scripts/p056_license_compliance.py",
+    "scripts/p056_license_compliance_v0111.py",
+    ".github/workflows/p056-license-compliance-action.yml",
+    ".github/ISSUE_TEMPLATE/p056-license-compliance.yml",
+    "docs/P056-LICENSE-COMPLIANCE-START-HERE.md",
+    "docs/P056-LICENSE-COMPLIANCE.md",
+    "docs/P056-RELEASE-NOTES-v0.11.1.md",
+    "tests/test_p056_license_compliance.py",
+    "tests/test_p056_deterministic_evidence.py"
+  ],
+  "publication_mode": "DRAFT_THEN_PUBLISH",
+  "post_publish_exact_tag_verification_required": true,
+  "roadmap_completion_on_publish": false,
+  "make_latest": true
+}
